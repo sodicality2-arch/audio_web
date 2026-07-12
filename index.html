@@ -130,7 +130,7 @@
                 <label class="w-full flex items-center justify-center gap-2 p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg cursor-pointer transition-colors shadow-lg">
                     <i class="ph ph-folder-plus text-xl"></i>
                     <span class="font-medium hidden md:block">曲を追加</span>
-                    <input type="file" id="file-input" multiple accept="audio/*" class="hidden" onchange="handleFileSelect(event)">
+                    <input type="file" id="file-input" multiple accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.aiff,.aif,.m4b,.opus,audio/*" class="hidden" onchange="handleFileSelect(event)">
                 </label>
             </div>
         </nav>
@@ -603,6 +603,14 @@
         }
 
         // --- STREAMING_CHUNK:JavaScript Logic - File Handling & DB ---
+        function isSupportedAudioFile(file) {
+            const type = (file.type || '').toLowerCase();
+            if (type.startsWith('audio/')) return true;
+
+            const name = (file.name || '').toLowerCase();
+            return /\.(mp3|m4a|aac|wav|ogg|oga|flac|aiff|aif|m4b|opus)$/i.test(name);
+        }
+
         async function handleFileSelect(e) {
             const files = e.target.files;
             if (!files.length) return;
@@ -614,7 +622,7 @@
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                if (!file.type.startsWith('audio/')) continue;
+                if (!isSupportedAudioFile(file)) continue;
                 
                 await new Promise((resolve) => {
                     jsmediatags.read(file, {
