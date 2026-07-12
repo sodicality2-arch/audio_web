@@ -5,15 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Calm Web Player</title>
     
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- jsmediatags for parsing ID3 tags from audio files -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
-    <!-- Dexie.js for easier IndexedDB database management -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
-    <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-
     <script>
         tailwind.config = {
             theme: {
@@ -35,6 +26,15 @@
             }
         }
     </script>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsmediatags for parsing ID3 tags from audio files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+    <!-- Dexie.js for easier IndexedDB database management -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dexie/3.2.4/dexie.min.js"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
     <style>
         /* カスタムスクロールバー */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -508,24 +508,28 @@
             audio.play().catch(e => console.error("Play prevented:", e));
 
             // Setup Media Session API for background playback and lock screen controls
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.artist,
-                    album: track.album,
-                    artwork: [
-                        { src: coverUrl, sizes: '512x512', type: track.coverBlob ? track.coverBlob.type : 'image/png' }
-                    ]
-                });
-                navigator.mediaSession.setActionHandler('play', () => audio.play());
-                navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-                navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-                navigator.mediaSession.setActionHandler('nexttrack', playNext);
+            if ('mediaSession' in navigator && typeof MediaMetadata !== 'undefined') {
+                try {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: track.title,
+                        artist: track.artist,
+                        album: track.album,
+                        artwork: [
+                            { src: coverUrl, sizes: '512x512', type: track.coverBlob ? track.coverBlob.type : 'image/png' }
+                        ]
+                    });
+                    navigator.mediaSession.setActionHandler('play', () => audio.play());
+                    navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+                    navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+                    navigator.mediaSession.setActionHandler('nexttrack', playNext);
+                } catch (mediaError) {
+                    console.warn('Media Session API initialization failed:', mediaError);
+                }
             }
         }
 
         function togglePlay() {
-            if (!audio.src || audio.src === window.location.href) return;
+            if (!audio.src) return;
             if (isPlaying) audio.pause();
             else audio.play();
         }
@@ -605,8 +609,8 @@
             
             // Show loading state (simple alert replacement for now)
             const btnText = document.querySelector('label span');
-            const originalText = btnText.innerText;
-            btnText.innerText = "読み込み中...";
+            const originalText = btnText ? btnText.innerText : '';
+            if (btnText) btnText.innerText = "読み込み中...";
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -650,12 +654,15 @@
                 });
             }
             
-            btnText.innerText = originalText;
+            if (btnText) btnText.innerText = originalText;
             e.target.value = ""; // Reset input
             renderLibrary();
         }
 
-        async function deleteTrack(id) {
+        async function deleteTrack(id, e) {
+            if (e) {
+                e.stopPropagation();
+            }
             if(confirm("この曲をライブラリから削除しますか？")) {
                 await db.tracks.delete(id);
                 renderLibrary();
