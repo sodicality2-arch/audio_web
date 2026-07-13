@@ -45,6 +45,8 @@
         /* レンジスライダーのスタイルリセットとカスタマイズ */
         input[type=range] {
             -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
             background: transparent;
             width: 100%;
         }
@@ -63,12 +65,14 @@
             background: #818cf8;
             cursor: pointer;
             -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
             margin-top: -5px;
             box-shadow: 0 0 5px rgba(0,0,0,0.3);
         }
         input[type=range]:hover::-webkit-slider-thumb { background: #6366f1; }
 
-        /* 縦型スライダー (イコライザ用) */
+        /* 縦型スライダー (イコライザ用) - 回転させず標準の縦表示を使うことで操作バグを完全に修正 */
         .vertical-slider-container {
             height: 150px;
             display: flex;
@@ -77,20 +81,41 @@
         }
         .vertical-slider {
             -webkit-appearance: none;
-            width: 150px;
-            height: 6px;
+            -moz-appearance: none;
+            appearance: none;
+            writing-mode: vertical-lr; /* 標準の縦型表示 */
+            direction: rtl; /* 上方向をプラスにするため反転 */
+            width: 8px;
+            height: 150px;
             background: #3f3f46;
-            border-radius: 3px;
-            transform: rotate(-90deg);
-            transform-origin: center;
+            border-radius: 4px;
+            outline: none;
         }
         .vertical-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #818cf8;
+            -moz-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
             border-radius: 50%;
+            background: #818cf8;
             cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        }
+        .vertical-slider::-webkit-slider-thumb:hover {
+            background: #6366f1;
+        }
+        .vertical-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #818cf8;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        }
+        .vertical-slider::-moz-range-thumb:hover {
+            background: #6366f1;
         }
 
         /* ユーティリティクラス */
@@ -415,7 +440,7 @@
             eqToggle: document.getElementById('eq-toggle'),
         };
 
-        // --- STREAMING_CHUNK: Optimizing files for iOS & iPadOS Safari ---
+        // --- STREAMING_CHUNK: Optimizing files and audio routes for iOS / iPadOS... ---
         /**
          * Dynamic optimization for iOS / iPadOS
          * Fixes files being greyed out by modifying the accept attribute
@@ -458,19 +483,28 @@
             }
         });
 
-        // iOS Safari AudioContext resume requirement
-        document.body.addEventListener('touchstart', initAudioContext, { once: true });
-        document.body.addEventListener('click', initAudioContext, { once: true });
+        // iOS Safari AudioContext resume requirement (Trigger on raw synchronous user interaction)
+        document.body.addEventListener('touchstart', forceResumeAudioContext);
+        document.body.addEventListener('click', forceResumeAudioContext);
 
-        // --- STREAMING_CHUNK: Setup Web Audio Context and Node bypass ---
+        function forceResumeAudioContext() {
+            if (!audioCtx) {
+                initAudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(e => console.warn("Failed to resume AudioContext during touch:", e));
+            }
+        }
+
+        // --- STREAMING_CHUNK: Setting up robust Web Audio Context... ---
         function initAudioContext() {
-            if (audioCtx || !eqEnabled) return;
+            if (audioCtx) return; // Never recreate or multiple source nodes will crash standard routing
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 trackSource = audioCtx.createMediaElementSource(audio);
                 
-                let prevNode = trackSource;
                 eqBands = [];
+                let prevNode = trackSource;
                 frequencies.forEach(freq => {
                     let filter = audioCtx.createBiquadFilter();
                     filter.type = 'peaking';
@@ -481,15 +515,17 @@
                     prevNode.connect(filter);
                     prevNode = filter;
                 });
-                prevNode.connect(audioCtx.destination);
-                
-                // Keep the initial state synced with current sliders
+
+                // Apply initial sliders to BiquadFilters
                 const sliders = document.querySelectorAll('.vertical-slider');
                 sliders.forEach((slider, idx) => {
                     if (eqBands[idx]) {
-                        eqBands[idx].gain.value = parseFloat(slider.value);
+                        eqBands[idx].gain.value = parseFloat(slider.value) || 0;
                     }
                 });
+
+                // Set initial connection based on bypass setting
+                updateAudioGraph();
 
                 if (audioCtx.state === 'suspended') {
                     audioCtx.resume();
@@ -499,40 +535,37 @@
             }
         }
 
+        function updateAudioGraph() {
+            if (!trackSource || !audioCtx) return;
+            try {
+                trackSource.disconnect();
+                if (eqEnabled) {
+                    // Connect with filters enabled
+                    let prevNode = trackSource;
+                    eqBands.forEach(filter => {
+                        prevNode.connect(filter);
+                        prevNode = filter;
+                    });
+                    prevNode.connect(audioCtx.destination);
+                } else {
+                    // Bypass direct output connection to the destination
+                    trackSource.connect(audioCtx.destination);
+                }
+            } catch (e) {
+                console.warn("Failed to configure audio graph routing:", e);
+            }
+        }
+
         function toggleEqProcessing(enabled) {
             eqEnabled = enabled;
             toggleSlidersVisualState(enabled);
 
-            if (enabled) {
-                if (!audioCtx) {
-                    initAudioContext();
-                } else if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-                // Reconnect if needed
-                try {
-                    if (audioCtx && trackSource) {
-                        trackSource.disconnect();
-                        let prevNode = trackSource;
-                        eqBands.forEach(filter => {
-                            prevNode.connect(filter);
-                            prevNode = filter;
-                        });
-                        prevNode.connect(audioCtx.destination);
-                    }
-                } catch(e) {
-                    console.warn("Failed to connect Audio Graph", e);
-                }
+            if (!audioCtx) {
+                initAudioContext();
             } else {
-                // Bypass EQ: direct speaker output
-                try {
-                    if (trackSource) {
-                        trackSource.disconnect();
-                        // Direct connection to destination bypasses filters
-                        trackSource.connect(audioCtx.destination);
-                    }
-                } catch(e) {
-                    console.warn("Failed to bypass Audio Graph", e);
+                updateAudioGraph();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
                 }
             }
         }
@@ -572,7 +605,7 @@
             audio.addEventListener('ended', () => {
                 if (repeatMode === 2) {
                     audio.currentTime = 0;
-                    audio.play();
+                    audio.play().catch(e => console.warn("Failed to replay ended track:", e));
                 } else {
                     playNext();
                 }
@@ -582,8 +615,8 @@
                 isPlaying = true;
                 els.playBtn.innerHTML = '<i class="ph-fill ph-pause text-2xl"></i>';
                 els.focusCover.classList.add('scale-105');
-                if(eqEnabled && audioCtx && audioCtx.state === 'suspended') {
-                    audioCtx.resume();
+                if(audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume().catch(e => console.warn(e));
                 }
             });
 
@@ -594,8 +627,16 @@
             });
         }
 
-        // --- STREAMING_CHUNK: Handling playback and Media Session for background support ---
+        // --- STREAMING_CHUNK: Playback logic with synchronous user stack resume guarantees... ---
         async function playTrack(id, queueArray = null) {
+            // Guarantee that AudioContext is resumed immediately inside click stack
+            if (!audioCtx) {
+                initAudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(e => console.warn("Sync resume failed:", e));
+            }
+
             if (queueArray) {
                 currentQueue = queueArray;
                 currentIndex = currentQueue.findIndex(t => t.id === id);
@@ -633,12 +674,14 @@
                     row.classList.add('bg-indigo-500/20', 'border-indigo-500/50');
                 }
             });
-
-            if (eqEnabled) {
-                initAudioContext();
-            }
             
-            audio.play().catch(e => console.error("Play prevented:", e));
+            audio.play().catch(e => {
+                console.error("Play prevented:", e);
+                // Try second activation attempt
+                if (audioCtx) {
+                    audioCtx.resume().then(() => audio.play().catch(e2 => console.error("Secondary fail:", e2)));
+                }
+            });
 
             // Setup Media Session API for background playback and lock screen controls
             if ('mediaSession' in navigator && typeof MediaMetadata !== 'undefined') {
@@ -651,7 +694,7 @@
                             { src: coverUrl, sizes: '512x512', type: track.coverBlob ? track.coverBlob.type : 'image/png' }
                         ]
                     });
-                    navigator.mediaSession.setActionHandler('play', () => audio.play());
+                    navigator.mediaSession.setActionHandler('play', () => audio.play().catch(e => console.warn(e)));
                     navigator.mediaSession.setActionHandler('pause', () => audio.pause());
                     navigator.mediaSession.setActionHandler('previoustrack', playPrev);
                     navigator.mediaSession.setActionHandler('nexttrack', playNext);
@@ -663,8 +706,12 @@
 
         function togglePlay() {
             if (!audio.src) return;
+            // Immediate AudioContext activation
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(e => console.warn(e));
+            }
             if (isPlaying) audio.pause();
-            else audio.play();
+            else audio.play().catch(e => console.error(e));
         }
 
         function playNext() {
