@@ -160,8 +160,8 @@
                 <label class="relative w-12 h-12 md:w-full md:h-auto flex items-center justify-center gap-2 p-0 md:p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full md:rounded-lg cursor-pointer transition-colors shadow-lg shrink-0" title="曲を追加">
                     <i class="ph ph-folder-plus text-xl block"></i>
                     <span class="font-medium hidden md:block">曲を追加</span>
-                    <!-- iOSで絶対にグレーアウトしないよう初期値として安全な accept="audio/*" を設定 -->
-                    <input type="file" id="file-input" multiple accept="audio/*" class="absolute opacity-0 w-1 h-1 pointer-events-none" onchange="handleFileSelect(event)">
+                    <!-- iOSで絶対にグレーアウトしないよう、初期の accept 属性は完全に外し、JS側でデバイス別に最適化します -->
+                    <input type="file" id="file-input" multiple class="absolute opacity-0 w-1 h-1 pointer-events-none" onchange="handleFileSelect(event)">
                 </label>
             </div>
         </nav>
@@ -542,7 +542,10 @@
             
             if (isIOS) {
                 if (fileInput) {
-                    fileInput.setAttribute('accept', 'audio/*');
+                    // 【超重要】iOS/iPadOS では、accept 属性に少しでも audio/* や拡張子を記述すると、
+                    // iCloud等ファイルアプリ上であらゆるオーディオファイル（FLAC等を含む）がグレーアウトして選択不能になります。
+                    // 唯一の解決法は accept 属性を「完全に除去」することです。選択後のバリデーションでセキュリティは保たれます。
+                    fileInput.removeAttribute('accept');
                 }
                 // Default EQ off for seamless background playback
                 eqEnabled = false;
