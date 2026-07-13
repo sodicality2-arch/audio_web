@@ -2,9 +2,11 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Calm Web Player</title>
     
+    <!-- Tailwind CSS を最初にロードすることで、直後の tailwind.config が正常に動作します -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -26,8 +28,6 @@
             }
         }
     </script>
-    <!-- Tailwind CSS for styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <!-- jsmediatags for parsing ID3 tags from audio files -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <!-- Dexie.js for easier IndexedDB database management -->
@@ -98,9 +98,14 @@
         .glass-panel { background: rgba(39, 39, 42, 0.8); backdrop-filter: blur(10px); }
         
         body { -webkit-tap-highlight-color: transparent; }
+
+        /* セーフエリア対応のためのボトムパディング調整 */
+        .safe-pb {
+            padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+        }
     </style>
 </head>
-<body class="bg-zinc-900 text-zinc-200 font-sans h-screen flex flex-col overflow-hidden selection:bg-indigo-500/30">
+<body class="bg-zinc-900 text-zinc-200 font-sans h-[100dvh] flex flex-col overflow-hidden selection:bg-indigo-500/30">
 
     <div class="flex-1 flex overflow-hidden relative">
         
@@ -126,9 +131,9 @@
                 </button>
             </div>
 
-            <div class="p-4 border-t border-zinc-700">
-                <label class="w-full flex items-center justify-center gap-2 p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg cursor-pointer transition-colors shadow-lg">
-                    <i class="ph ph-folder-plus text-xl"></i>
+            <div class="p-4 border-t border-zinc-700 flex justify-center md:justify-start">
+                <label class="w-12 h-12 md:w-full md:h-auto flex items-center justify-center gap-2 p-0 md:p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full md:rounded-lg cursor-pointer transition-colors shadow-lg shrink-0" title="曲を追加">
+                    <i class="ph ph-folder-plus text-xl block"></i>
                     <span class="font-medium hidden md:block">曲を追加</span>
                     <input type="file" id="file-input" multiple accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.aiff,.aif,.m4b,.opus,audio/*" class="hidden" onchange="handleFileSelect(event)">
                 </label>
@@ -138,18 +143,37 @@
         <!-- Main Content Area -->
         <main class="flex-1 relative bg-zinc-900 overflow-hidden">
             
-            <div id="view-library" class="view-panel h-full flex flex-col p-4 md:p-8 overflow-y-auto hide">
-                <div class="flex justify-between items-center mb-6">
+            <div id="view-library" class="view-panel h-full flex flex-col p-4 md:p-8 overflow-hidden hide">
+                <div class="flex justify-between items-center mb-4 shrink-0">
                     <h1 class="text-2xl md:text-3xl font-bold">すべての曲</h1>
-                    <div class="relative w-48 md:w-64">
-                        <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"></i>
-                        <input type="text" id="search-input" placeholder="検索..." onkeyup="renderLibrary()" class="w-full bg-zinc-800 border border-zinc-700 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:border-indigo-500 transition-colors text-sm">
+                    <div class="flex items-center gap-3">
+                        <button id="btn-select-mode" onclick="toggleSelectMode()" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-300 transition-colors" title="複数選択モード">
+                            <i class="ph ph-check-square text-xl"></i>
+                        </button>
+                        <div class="relative w-36 md:w-64">
+                            <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"></i>
+                            <input type="text" id="search-input" placeholder="検索..." onkeyup="renderLibrary()" class="w-full bg-zinc-800 border border-zinc-700 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:border-indigo-500 transition-colors text-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bulk action controls (Shown in Selection Mode) -->
+                <div id="bulk-controls" class="bg-zinc-800/80 border border-indigo-500/30 rounded-xl p-3 mb-4 flex items-center justify-between hide shrink-0 animate-fade-in">
+                    <div class="flex items-center gap-2 text-sm text-zinc-300">
+                        <span id="selected-count" class="font-bold text-indigo-400">0</span> 件選択中
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="selectAllTracks(true)" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold transition-colors">すべて選択</button>
+                        <button onclick="selectAllTracks(false)" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold transition-colors">解除</button>
+                        <button onclick="deleteSelectedTracks()" class="px-3 py-1.5 bg-red-600/90 hover:bg-red-500 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-1">
+                            <i class="ph ph-trash"></i> 選択した曲を削除
+                        </button>
                     </div>
                 </div>
                 
-                <div class="bg-zinc-800/50 rounded-xl border border-zinc-700 overflow-hidden flex-1 flex flex-col">
-                    <div class="grid grid-cols-[auto_1fr_1fr_auto] gap-4 p-4 border-b border-zinc-700 text-sm font-semibold text-zinc-400 sticky top-0 bg-zinc-800">
-                        <div class="w-8 text-center">#</div>
+                <div class="bg-zinc-800/50 rounded-xl border border-zinc-700 overflow-hidden flex-1 flex flex-col min-h-0">
+                    <div id="library-header-grid" class="grid grid-cols-[auto_1fr_1fr_auto] gap-4 p-4 border-b border-zinc-700 text-sm font-semibold text-zinc-400 sticky top-0 bg-zinc-800 shrink-0 z-10">
+                        <div class="w-8 text-center" id="library-header-index">#</div>
                         <div>タイトル / アーティスト</div>
                         <div class="hidden md:block">アルバム</div>
                         <div class="w-20 text-center">操作</div>
@@ -198,21 +222,36 @@
 
             <div id="view-eq" class="view-panel h-full flex flex-col p-4 md:p-8 overflow-y-auto hide">
                 <h1 class="text-2xl md:text-3xl font-bold mb-2">10バンド イコライザ</h1>
-                <p class="text-zinc-400 mb-8 text-sm">オーディオ出力をカスタマイズします（Web Audio API）</p>
-                
-                <div class="bg-zinc-800 border border-zinc-700 rounded-xl p-6 mb-8 max-w-sm">
-                    <label class="block text-sm font-medium text-zinc-400 mb-2">プリセット</label>
-                    <select id="eq-preset" onchange="applyEqPreset(this.value)" class="w-full bg-zinc-900 border border-zinc-600 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500">
-                        <option value="flat">Flat</option>
-                        <option value="bass">Bass Boost</option>
-                        <option value="vocal">Vocal Boost</option>
-                        <option value="rock">Rock</option>
-                        <option value="pop">Pop</option>
-                        <option value="classical">Classical</option>
-                    </select>
+                <p class="text-zinc-400 mb-6 text-sm">オーディオ出力をカスタマイズします（Web Audio API）</p>
+
+                <div class="flex flex-col sm:flex-row gap-4 mb-8">
+                    <div class="bg-zinc-800 border border-zinc-700 rounded-xl p-4 flex-1">
+                        <label class="block text-sm font-medium text-zinc-400 mb-2">プリセット</label>
+                        <select id="eq-preset" onchange="applyEqPreset(this.value)" class="w-full bg-zinc-900 border border-zinc-600 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500">
+                            <option value="flat">Flat</option>
+                            <option value="bass">Bass Boost</option>
+                            <option value="vocal">Vocal Boost</option>
+                            <option value="rock">Rock</option>
+                            <option value="pop">Pop</option>
+                            <option value="classical">Classical</option>
+                        </select>
+                    </div>
+
+                    <div class="bg-zinc-800 border border-zinc-700 rounded-xl p-4 flex-1 flex flex-col justify-center">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="block text-sm font-semibold text-white">高音質EQモード</span>
+                                <span class="block text-xs text-zinc-400">※ iOS/iPad OSでバックグラウンド再生する時はオフを推奨します</span>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="eq-toggle" onchange="toggleEqProcessing(this.checked)" class="sr-only peer">
+                                <div class="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            </label>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="flex gap-2 md:gap-6 overflow-x-auto pb-4 items-center justify-start md:justify-center px-4 w-full">
+                <div id="eq-sliders-wrapper" class="flex gap-2 md:gap-6 overflow-x-auto pb-4 items-center justify-start md:justify-center px-4 w-full">
                     <!-- Sliders generated by JS -->
                     <div id="eq-sliders" class="flex gap-4 md:gap-8 min-w-max"></div>
                 </div>
@@ -240,7 +279,7 @@
         </main>
     </div>
 
-    <div class="h-28 md:h-24 bg-zinc-800 border-t border-zinc-700 flex flex-col relative z-50">
+    <div class="h-32 md:h-24 bg-zinc-800 border-t border-zinc-700 flex flex-col relative z-50 shrink-0 safe-pb">
         
         <!-- Progress Bar (Absolute Top) -->
         <div class="absolute top-0 left-0 right-0 h-1 md:h-2 -mt-1 md:-mt-1 group cursor-pointer" onclick="seekClick(event)">
@@ -251,7 +290,7 @@
             </div>
         </div>
 
-        <div class="flex-1 flex items-center justify-between px-4 md:px-6">
+        <div class="flex-1 flex items-center justify-between px-4 md:px-6 h-full">
             
             <!-- Now Playing Info -->
             <div class="flex items-center gap-3 md:gap-4 w-1/3 min-w-0">
@@ -266,21 +305,21 @@
 
             <!-- Controls -->
             <div class="flex flex-col items-center justify-center w-1/3">
-                <div class="flex items-center gap-4 md:gap-6 mb-1 md:mb-0">
+                <div class="flex items-center gap-3 md:gap-6 mb-1 md:mb-0">
                     <button onclick="toggleShuffle()" id="btn-shuffle" class="text-zinc-400 hover:text-white transition-colors p-2">
-                        <i class="ph ph-shuffle text-xl"></i>
+                        <i class="ph ph-shuffle text-lg md:text-xl"></i>
                     </button>
                     <button onclick="playPrev()" class="text-zinc-200 hover:text-white transition-colors p-2">
-                        <i class="ph-fill ph-skip-back text-2xl"></i>
+                        <i class="ph-fill ph-skip-back text-xl md:text-2xl"></i>
                     </button>
-                    <button onclick="togglePlay()" id="btn-play" class="w-12 h-12 md:w-14 md:h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95">
-                        <i class="ph-fill ph-play text-2xl ml-1"></i>
+                    <button onclick="togglePlay()" id="btn-play" class="w-10 h-10 md:w-14 md:h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 shrink-0">
+                        <i class="ph-fill ph-play text-xl md:text-2xl ml-1"></i>
                     </button>
                     <button onclick="playNext()" class="text-zinc-200 hover:text-white transition-colors p-2">
-                        <i class="ph-fill ph-skip-forward text-2xl"></i>
+                        <i class="ph-fill ph-skip-forward text-xl md:text-2xl"></i>
                     </button>
                     <button onclick="toggleRepeat()" id="btn-repeat" class="text-zinc-400 hover:text-white transition-colors p-2">
-                        <i class="ph ph-repeat text-xl"></i>
+                        <i class="ph ph-repeat text-lg md:text-xl"></i>
                     </button>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-zinc-400 w-full max-w-md hidden md:flex mt-1">
@@ -346,9 +385,13 @@
         let repeatMode = 0; // 0: None, 1: All, 2: One
         let focusMode = false;
         
-        let audioCtx;
-        let trackSource;
+        let selectMode = false;
+        let selectedTrackIds = new Set();
+        
+        let audioCtx = null;
+        let trackSource = null;
         let eqBands = [];
+        let eqEnabled = false; // iOS background support: bypass EQ by default
         const frequencies = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
         // --- Core Audio Element ---
@@ -369,12 +412,38 @@
             focusCover: document.getElementById('focus-cover'),
             focusTitle: document.getElementById('focus-title'),
             focusArtist: document.getElementById('focus-artist'),
+            eqToggle: document.getElementById('eq-toggle'),
         };
+
+        // --- STREAMING_CHUNK: Optimizing files for iOS & iPadOS Safari ---
+        /**
+         * Dynamic optimization for iOS / iPadOS
+         * Fixes files being greyed out by modifying the accept attribute
+         */
+        function optimizeForIOS() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            if (isIOS) {
+                const fileInput = document.getElementById('file-input');
+                if (fileInput) {
+                    fileInput.setAttribute('accept', 'audio/*');
+                }
+                // Set default EQ setting to disabled for smooth background playback
+                eqEnabled = false;
+                if (els.eqToggle) els.eqToggle.checked = false;
+                toggleSlidersVisualState(false);
+            } else {
+                eqEnabled = true;
+                if (els.eqToggle) els.eqToggle.checked = true;
+                toggleSlidersVisualState(true);
+            }
+        }
 
         // Initialize on load
         window.addEventListener('DOMContentLoaded', async () => {
             setupNavigation();
             buildEqUI();
+            optimizeForIOS();
             await renderLibrary();
             switchView('library');
             setupAudioEvents();
@@ -393,14 +462,15 @@
         document.body.addEventListener('touchstart', initAudioContext, { once: true });
         document.body.addEventListener('click', initAudioContext, { once: true });
 
-        // --- STREAMING_CHUNK:JavaScript Logic - Audio & Web Audio API ---
+        // --- STREAMING_CHUNK: Setup Web Audio Context and Node bypass ---
         function initAudioContext() {
-            if (audioCtx) return;
+            if (audioCtx || !eqEnabled) return;
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 trackSource = audioCtx.createMediaElementSource(audio);
                 
                 let prevNode = trackSource;
+                eqBands = [];
                 frequencies.forEach(freq => {
                     let filter = audioCtx.createBiquadFilter();
                     filter.type = 'peaking';
@@ -413,15 +483,72 @@
                 });
                 prevNode.connect(audioCtx.destination);
                 
-                // Ensure audio context is running
+                // Keep the initial state synced with current sliders
+                const sliders = document.querySelectorAll('.vertical-slider');
+                sliders.forEach((slider, idx) => {
+                    if (eqBands[idx]) {
+                        eqBands[idx].gain.value = parseFloat(slider.value);
+                    }
+                });
+
                 if (audioCtx.state === 'suspended') {
                     audioCtx.resume();
                 }
             } catch (e) {
-                console.warn("Web Audio API not supported or blocked. Using standard audio.", e);
+                console.warn("Web Audio API initialization bypassed or failed.", e);
             }
         }
 
+        function toggleEqProcessing(enabled) {
+            eqEnabled = enabled;
+            toggleSlidersVisualState(enabled);
+
+            if (enabled) {
+                if (!audioCtx) {
+                    initAudioContext();
+                } else if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                // Reconnect if needed
+                try {
+                    if (audioCtx && trackSource) {
+                        trackSource.disconnect();
+                        let prevNode = trackSource;
+                        eqBands.forEach(filter => {
+                            prevNode.connect(filter);
+                            prevNode = filter;
+                        });
+                        prevNode.connect(audioCtx.destination);
+                    }
+                } catch(e) {
+                    console.warn("Failed to connect Audio Graph", e);
+                }
+            } else {
+                // Bypass EQ: direct speaker output
+                try {
+                    if (trackSource) {
+                        trackSource.disconnect();
+                        // Direct connection to destination bypasses filters
+                        trackSource.connect(audioCtx.destination);
+                    }
+                } catch(e) {
+                    console.warn("Failed to bypass Audio Graph", e);
+                }
+            }
+        }
+
+        function toggleSlidersVisualState(enabled) {
+            const wrapper = document.getElementById('eq-sliders-wrapper');
+            if (wrapper) {
+                if (enabled) {
+                    wrapper.classList.remove('opacity-30', 'pointer-events-none');
+                } else {
+                    wrapper.classList.add('opacity-30', 'pointer-events-none');
+                }
+            }
+        }
+
+        // --- STREAMING_CHUNK: Setup core audio events for seek/visuals ---
         function setupAudioEvents() {
             audio.addEventListener('timeupdate', () => {
                 if (!audio.duration) return;
@@ -455,7 +582,9 @@
                 isPlaying = true;
                 els.playBtn.innerHTML = '<i class="ph-fill ph-pause text-2xl"></i>';
                 els.focusCover.classList.add('scale-105');
-                if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+                if(eqEnabled && audioCtx && audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
             });
 
             audio.addEventListener('pause', () => {
@@ -465,6 +594,7 @@
             });
         }
 
+        // --- STREAMING_CHUNK: Handling playback and Media Session for background support ---
         async function playTrack(id, queueArray = null) {
             if (queueArray) {
                 currentQueue = queueArray;
@@ -504,7 +634,10 @@
                 }
             });
 
-            initAudioContext();
+            if (eqEnabled) {
+                initAudioContext();
+            }
+            
             audio.play().catch(e => console.error("Play prevented:", e));
 
             // Setup Media Session API for background playback and lock screen controls
@@ -602,7 +735,7 @@
             return `${m}:${s}`;
         }
 
-        // --- STREAMING_CHUNK:JavaScript Logic - File Handling & DB ---
+        // --- STREAMING_CHUNK: Reading audio files, fully supporting FLAC metadata parsing ---
         function isSupportedAudioFile(file) {
             const type = (file.type || '').toLowerCase();
             if (type.startsWith('audio/')) return true;
@@ -615,7 +748,6 @@
             const files = e.target.files;
             if (!files.length) return;
             
-            // Show loading state (simple alert replacement for now)
             const btnText = document.querySelector('label span');
             const originalText = btnText ? btnText.innerText : '';
             if (btnText) btnText.innerText = "読み込み中...";
@@ -647,6 +779,7 @@
                             resolve();
                         },
                         onError: async function(error) {
+                            // Standard fallback block for metadata reading failures (e.g. some flac/wav headers)
                             console.warn("Could not read tags for", file.name, error);
                             await db.tracks.add({
                                 title: file.name.replace(/\.[^/.]+$/, ""),
@@ -673,11 +806,100 @@
             }
             if(confirm("この曲をライブラリから削除しますか？")) {
                 await db.tracks.delete(id);
+                // Handle current track deleted
+                if (currentQueue[currentIndex] && currentQueue[currentIndex].id === id) {
+                    audio.pause();
+                    audio.src = '';
+                }
                 renderLibrary();
             }
         }
 
-        // --- STREAMING_CHUNK:JavaScript Logic - UI Rendering ---
+        // --- STREAMING_CHUNK: Implementing dynamic multi-selection and bulk track deletion ---
+        function toggleSelectMode() {
+            selectMode = !selectMode;
+            selectedTrackIds.clear();
+            
+            const btn = document.getElementById('btn-select-mode');
+            const bulkControls = document.getElementById('bulk-controls');
+            const headerIndex = document.getElementById('library-header-index');
+
+            if (selectMode) {
+                btn.classList.add('bg-indigo-600', 'text-white');
+                btn.classList.remove('bg-zinc-800', 'text-zinc-300');
+                bulkControls.classList.remove('hide');
+                headerIndex.innerHTML = `<i class="ph ph-squares-four text-lg"></i>`;
+                updateSelectedCountUI();
+            } else {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-zinc-800', 'text-zinc-300');
+                bulkControls.classList.add('hide');
+                headerIndex.innerHTML = '#';
+            }
+            renderLibrary();
+        }
+
+        function handleTrackCheck(id, checked, event) {
+            event.stopPropagation();
+            if (checked) {
+                selectedTrackIds.add(id);
+            } else {
+                selectedTrackIds.delete(id);
+            }
+            updateSelectedCountUI();
+        }
+
+        function updateSelectedCountUI() {
+            document.getElementById('selected-count').innerText = selectedTrackIds.size;
+        }
+
+        async function selectAllTracks(select) {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            let tracks = await db.tracks.toArray();
+            if (query) {
+                tracks = tracks.filter(t => 
+                    t.title.toLowerCase().includes(query) || 
+                    t.artist.toLowerCase().includes(query) ||
+                    t.album.toLowerCase().includes(query)
+                );
+            }
+
+            selectedTrackIds.clear();
+            if (select) {
+                tracks.forEach(track => selectedTrackIds.add(track.id));
+            }
+            
+            document.querySelectorAll('.track-checkbox').forEach(chk => {
+                chk.checked = select;
+            });
+            updateSelectedCountUI();
+        }
+
+        async function deleteSelectedTracks() {
+            if (selectedTrackIds.size === 0) {
+                alert("曲が選択されていません。");
+                return;
+            }
+
+            if (confirm(`選択された ${selectedTrackIds.size} 件の曲をライブラリから削除しますか？`)) {
+                const idsToDelete = Array.from(selectedTrackIds);
+                
+                // If currently playing track is in delete list, stop audio
+                const currentTrack = currentQueue[currentIndex];
+                if (currentTrack && selectedTrackIds.has(currentTrack.id)) {
+                    audio.pause();
+                    audio.src = '';
+                }
+
+                await db.tracks.bulkDelete(idsToDelete);
+                selectedTrackIds.clear();
+                updateSelectedCountUI();
+                toggleSelectMode(); // Close select mode after deletion
+                renderLibrary();
+            }
+        }
+
+        // --- STREAMING_CHUNK: Switching views dynamically and updating Navigation highlighters ---
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hide'));
             if(viewId !== 'focus') {
@@ -706,11 +928,12 @@
                 switchView('focus');
                 document.getElementById('sidebar').classList.add('hidden');
             } else {
-                switchView('library'); // Or previous view, simple fallback to library
+                switchView('library');
                 document.getElementById('sidebar').classList.remove('hidden');
             }
         }
 
+        // --- STREAMING_CHUNK: Dynamic responsive HTML builder for main Library grid ---
         async function renderLibrary() {
             const query = document.getElementById('search-input').value.toLowerCase();
             let tracks = await db.tracks.orderBy('addedAt').reverse().toArray();
@@ -736,22 +959,30 @@
                 div.className = `track-row grid grid-cols-[auto_1fr_1fr_auto] items-center gap-4 p-3 rounded-lg hover:bg-zinc-700/50 transition-colors border border-transparent cursor-pointer group ${currentIndex !== -1 && currentQueue[currentIndex] && currentQueue[currentIndex].id === track.id ? 'bg-indigo-500/20 border-indigo-500/50' : ''}`;
                 div.dataset.id = track.id;
                 
-                // Keep reference of current list for queue
                 div.onclick = (e) => {
-                    // Prevent playing if edit button was clicked
-                    if(e.target.closest('button')) return;
+                    if(e.target.closest('button') || e.target.closest('input[type="checkbox"]')) return;
                     playTrack(track.id, tracks);
                 };
 
                 let coverHtml = '<div class="w-10 h-10 bg-zinc-700 rounded shadow flex items-center justify-center shrink-0"><i class="ph ph-music-notes text-zinc-500"></i></div>';
                 if (track.coverBlob) {
                     const url = URL.createObjectURL(track.coverBlob);
-                    // Use a slightly hacky way to clean up URLs later to prevent leak, or rely on garbage collection if small
                     coverHtml = `<img src="${url}" class="w-10 h-10 rounded shadow object-cover shrink-0">`;
                 }
 
+                // Decide the index column based on Selection Mode
+                let indexColumnHtml = `<div class="w-8 text-center text-zinc-500 font-medium">${index + 1}</div>`;
+                if (selectMode) {
+                    const isChecked = selectedTrackIds.has(track.id) ? 'checked' : '';
+                    indexColumnHtml = `
+                        <div class="w-8 flex justify-center items-center">
+                            <input type="checkbox" class="track-checkbox w-5 h-5 accent-indigo-600 rounded cursor-pointer" ${isChecked} onchange="handleTrackCheck(${track.id}, this.checked, event)">
+                        </div>
+                    `;
+                }
+
                 div.innerHTML = `
-                    <div class="w-8 text-center text-zinc-500 font-medium">${index + 1}</div>
+                    ${indexColumnHtml}
                     <div class="flex items-center gap-3 min-w-0">
                         ${coverHtml}
                         <div class="min-w-0">
@@ -773,6 +1004,7 @@
             });
         }
 
+        // --- STREAMING_CHUNK: Album Grid Builder and detail views ---
         async function renderAlbums() {
             const tracks = await db.tracks.toArray();
             const albumsMap = {};
@@ -781,7 +1013,7 @@
                 if (!albumsMap[t.album]) {
                     albumsMap[t.album] = {
                         name: t.album,
-                        artist: t.artist, // assume first artist represents album artist
+                        artist: t.artist,
                         coverBlob: t.coverBlob,
                         tracks: []
                     };
@@ -870,7 +1102,7 @@
             }
         }
 
-        // --- STREAMING_CHUNK:JavaScript Logic - EQ & Metadata Editing ---
+        // --- STREAMING_CHUNK: Rendering custom 10-Band Equalizer tuning UI ---
         function buildEqUI() {
             const container = document.getElementById('eq-sliders');
             frequencies.forEach((freq, idx) => {
@@ -890,7 +1122,7 @@
 
         function updateEq(index, value) {
             document.getElementById(`eq-val-${index}`).innerText = value > 0 ? `+${value}` : value;
-            if (eqBands[index]) {
+            if (eqEnabled && eqBands[index]) {
                 eqBands[index].gain.value = value;
             }
         }
@@ -917,7 +1149,7 @@
         const editModalContent = document.getElementById('edit-modal-content');
 
         async function openEditModal(id, e) {
-            if(e) e.stopPropagation(); // Prevent playing track
+            if(e) e.stopPropagation();
             const track = await db.tracks.get(id);
             if (!track) return;
 
@@ -927,7 +1159,6 @@
             document.getElementById('edit-album').value = track.album;
 
             editModal.classList.remove('hide');
-            // Trigger reflow for transition
             void editModal.offsetWidth;
             editModal.classList.remove('opacity-0');
             editModalContent.classList.remove('scale-95');
@@ -950,14 +1181,12 @@
             await db.tracks.update(id, { title, artist, album });
             closeEditModal();
             
-            // Re-render based on current view
             if (!document.getElementById('view-library').classList.contains('hide')) {
                 renderLibrary();
             } else if (!document.getElementById('view-albums').classList.contains('hide')) {
                 renderAlbums();
             }
             
-            // Update currently playing UI if modified
             if (currentQueue[currentIndex] && currentQueue[currentIndex].id === id) {
                 currentQueue[currentIndex].title = title;
                 currentQueue[currentIndex].artist = artist;
@@ -980,7 +1209,7 @@
         }
 
         function setupNavigation() {
-            // Handle mobile logic if needed (currently responsive via Tailwind)
+            // Placeholder for optional desktop custom listeners
         }
     </script>
 </body>
