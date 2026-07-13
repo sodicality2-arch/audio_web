@@ -72,7 +72,7 @@
         }
         input[type=range]:hover::-webkit-slider-thumb { background: #6366f1; }
 
-        /* 縦型スライダー (イコライザ用) - 回転させず標準の縦表示を使うことで操作バグを完全に修正 */
+        /* 縦型スライダー (イコライザ用) - 標準の縦表示を使うことで操作バグを完全に修正 */
         .vertical-slider-container {
             height: 150px;
             display: flex;
@@ -157,10 +157,11 @@
             </div>
 
             <div class="p-4 border-t border-zinc-700 flex justify-center md:justify-start">
-                <label class="w-12 h-12 md:w-full md:h-auto flex items-center justify-center gap-2 p-0 md:p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full md:rounded-lg cursor-pointer transition-colors shadow-lg shrink-0" title="曲を追加">
+                <label class="relative w-12 h-12 md:w-full md:h-auto flex items-center justify-center gap-2 p-0 md:p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full md:rounded-lg cursor-pointer transition-colors shadow-lg shrink-0" title="曲を追加">
                     <i class="ph ph-folder-plus text-xl block"></i>
                     <span class="font-medium hidden md:block">曲を追加</span>
-                    <input type="file" id="file-input" multiple accept=".mp3,.m4a,.aac,.wav,.ogg,.flac,.aiff,.aif,.m4b,.opus,audio/*" class="hidden" onchange="handleFileSelect(event)">
+                    <!-- iOSで絶対にグレーアウトしないよう初期値として安全な accept="audio/*" を設定 -->
+                    <input type="file" id="file-input" multiple accept="audio/*" class="absolute opacity-0 w-1 h-1 pointer-events-none" onchange="handleFileSelect(event)">
                 </label>
             </div>
         </nav>
@@ -190,7 +191,7 @@
                     <div class="flex gap-2">
                         <button onclick="selectAllTracks(true)" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold transition-colors">すべて選択</button>
                         <button onclick="selectAllTracks(false)" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold transition-colors">解除</button>
-                        <button onclick="deleteSelectedTracks()" class="px-3 py-1.5 bg-red-600/90 hover:bg-red-500 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-1">
+                        <button onclick="confirmBulkDelete()" class="px-3 py-1.5 bg-red-600/90 hover:bg-red-500 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-1">
                             <i class="ph ph-trash"></i> 選択した曲を削除
                         </button>
                     </div>
@@ -304,6 +305,7 @@
         </main>
     </div>
 
+    <!-- Player Bottom Bar -->
     <div class="h-32 md:h-24 bg-zinc-800 border-t border-zinc-700 flex flex-col relative z-50 shrink-0 safe-pb">
         
         <!-- Progress Bar (Absolute Top) -->
@@ -367,6 +369,7 @@
         </div>
     </div>
 
+    <!-- Edit Metadata Modal -->
     <div id="edit-modal" class="absolute inset-0 bg-black/60 glass-panel hide flex items-center justify-center z-[100] p-4 opacity-0 transition-opacity duration-200">
         <div class="bg-zinc-800 border border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden transform scale-95 transition-transform duration-200" id="edit-modal-content">
             <div class="p-6 border-b border-zinc-700 flex justify-between items-center">
@@ -393,6 +396,28 @@
                 <button onclick="saveEdit()" class="px-5 py-2 rounded-lg font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors">保存</button>
             </div>
         </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replacing standard confirm) -->
+    <div id="confirm-modal" class="absolute inset-0 bg-black/65 glass-panel hide flex items-center justify-center z-[120] p-4 opacity-0 transition-opacity duration-200">
+        <div class="bg-zinc-800 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden transform scale-95 transition-transform duration-200" id="confirm-modal-content">
+            <div class="p-6">
+                <div class="w-12 h-12 bg-red-500/15 text-red-400 rounded-full flex items-center justify-center mb-4">
+                    <i class="ph ph-warning text-2xl"></i>
+                </div>
+                <h3 id="confirm-title" class="text-lg font-bold text-white mb-2">確認</h3>
+                <p id="confirm-desc" class="text-zinc-400 text-sm leading-relaxed">この操作は取り消せません。</p>
+            </div>
+            <div class="p-4 bg-zinc-800/50 border-t border-zinc-700 flex justify-end gap-3">
+                <button id="confirm-cancel-btn" class="px-4 py-2 rounded-lg text-sm font-semibold text-zinc-400 hover:bg-zinc-700 transition-colors">キャンセル</button>
+                <button id="confirm-ok-btn" class="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 hover:bg-red-500 text-white transition-colors">削除する</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Toast Notification Container (Replacing standard alert) -->
+    <div id="toast-container" class="absolute top-4 right-4 z-[150] flex flex-col gap-2 pointer-events-none">
+        <!-- Dynamic toasts will inject here -->
     </div>
 
     <script>
@@ -440,24 +465,93 @@
             eqToggle: document.getElementById('eq-toggle'),
         };
 
-        // --- STREAMING_CHUNK: Optimizing files and audio routes for iOS / iPadOS... ---
+        // --- Confirmation Modal Promise Handler ---
+        let confirmPromiseResolve = null;
+
+        function showCustomConfirm(title, description) {
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-desc').innerText = description;
+            
+            const modal = document.getElementById('confirm-modal');
+            const content = document.getElementById('confirm-modal-content');
+            
+            modal.classList.remove('hide');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            content.classList.remove('scale-95');
+
+            return new Promise((resolve) => {
+                confirmPromiseResolve = resolve;
+            });
+        }
+
+        function closeConfirmModal(result) {
+            const modal = document.getElementById('confirm-modal');
+            const content = document.getElementById('confirm-modal-content');
+            modal.classList.add('opacity-0');
+            content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hide');
+            }, 200);
+            
+            if (confirmPromiseResolve) {
+                confirmPromiseResolve(result);
+                confirmPromiseResolve = null;
+            }
+        }
+
+        document.getElementById('confirm-ok-btn').addEventListener('click', () => closeConfirmModal(true));
+        document.getElementById('confirm-cancel-btn').addEventListener('click', () => closeConfirmModal(false));
+
+        // --- Toast Notifications ---
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-xl shadow-xl border backdrop-blur-md text-sm font-semibold transition-all duration-300 transform translate-x-12 opacity-0 flex items-center gap-2 pointer-events-auto max-w-sm ${
+                type === 'error' 
+                ? 'bg-red-950/80 border-red-500/30 text-red-200' 
+                : 'bg-zinc-800/90 border-zinc-700 text-zinc-100'
+            }`;
+            
+            const icon = type === 'error' ? '<i class="ph-fill ph-warning-circle text-red-400 text-lg"></i>' : '<i class="ph-fill ph-info text-indigo-400 text-lg"></i>';
+            toast.innerHTML = `${icon} <span>${message}</span>`;
+            container.appendChild(toast);
+
+            // Animate In
+            void toast.offsetWidth;
+            toast.classList.remove('translate-x-12', 'opacity-0');
+
+            // Remove after delay
+            setTimeout(() => {
+                toast.classList.add('translate-x-12', 'opacity-0');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000);
+        }
+
+        // --- STREAMING_CHUNK: Device specific optimizations on startup... ---
         /**
-         * Dynamic optimization for iOS / iPadOS
-         * Fixes files being greyed out by modifying the accept attribute
+         * Dynamic file input optimization for iOS / iPadOS
+         * Prevents the greyed-out native file dialogue bug by removing raw extension lists.
          */
         function optimizeForIOS() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
                           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const fileInput = document.getElementById('file-input');
+            
             if (isIOS) {
-                const fileInput = document.getElementById('file-input');
                 if (fileInput) {
                     fileInput.setAttribute('accept', 'audio/*');
                 }
-                // Set default EQ setting to disabled for smooth background playback
+                // Default EQ off for seamless background playback
                 eqEnabled = false;
                 if (els.eqToggle) els.eqToggle.checked = false;
                 toggleSlidersVisualState(false);
             } else {
+                if (fileInput) {
+                    fileInput.setAttribute('accept', '.mp3,.m4a,.aac,.wav,.ogg,.flac,.aiff,.aif,.m4b,.opus,audio/*');
+                }
                 eqEnabled = true;
                 if (els.eqToggle) els.eqToggle.checked = true;
                 toggleSlidersVisualState(true);
@@ -496,7 +590,7 @@
             }
         }
 
-        // --- STREAMING_CHUNK: Setting up robust Web Audio Context... ---
+        // --- STREAMING_CHUNK: Web Audio Routing and EQ state controllers... ---
         function initAudioContext() {
             if (audioCtx) return; // Never recreate or multiple source nodes will crash standard routing
             try {
@@ -581,7 +675,7 @@
             }
         }
 
-        // --- STREAMING_CHUNK: Setup core audio events for seek/visuals ---
+        // --- STREAMING_CHUNK: Setup HTML Audio tag event binds... ---
         function setupAudioEvents() {
             audio.addEventListener('timeupdate', () => {
                 if (!audio.duration) return;
@@ -627,8 +721,16 @@
             });
         }
 
-        // --- STREAMING_CHUNK: Playback logic with synchronous user stack resume guarantees... ---
+        // --- STREAMING_CHUNK: Core audio playback controller with iOS touch unlock routing... ---
         async function playTrack(id, queueArray = null) {
+            // 【重要】iOS Safariの自動再生制限を突破するための「二段階アンロックプロセス」
+            // ユーザーによるクリックイベントの同期的スタック内でダミー再生を呼び、システムロックを解除します
+            audio.play().then(() => {
+                audio.pause();
+            }).catch(() => {
+                audio.load();
+            });
+
             // Guarantee that AudioContext is resumed immediately inside click stack
             if (!audioCtx) {
                 initAudioContext();
@@ -782,7 +884,7 @@
             return `${m}:${s}`;
         }
 
-        // --- STREAMING_CHUNK: Reading audio files, fully supporting FLAC metadata parsing ---
+        // --- STREAMING_CHUNK: Parsing metadata tags and indexing in Dexie DB... ---
         function isSupportedAudioFile(file) {
             const type = (file.type || '').toLowerCase();
             if (type.startsWith('audio/')) return true;
@@ -798,6 +900,8 @@
             const btnText = document.querySelector('label span');
             const originalText = btnText ? btnText.innerText : '';
             if (btnText) btnText.innerText = "読み込み中...";
+
+            let addedCount = 0;
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -823,10 +927,11 @@
                                 coverBlob: pictureBlob,
                                 addedAt: Date.now()
                             });
+                            addedCount++;
                             resolve();
                         },
                         onError: async function(error) {
-                            // Standard fallback block for metadata reading failures (e.g. some flac/wav headers)
+                            // フォールバック: FLACやタグが壊れている場合はファイル名をタイトルにする
                             console.warn("Could not read tags for", file.name, error);
                             await db.tracks.add({
                                 title: file.name.replace(/\.[^/.]+$/, ""),
@@ -836,6 +941,7 @@
                                 coverBlob: null,
                                 addedAt: Date.now()
                             });
+                            addedCount++;
                             resolve();
                         }
                     });
@@ -844,6 +950,10 @@
             
             if (btnText) btnText.innerText = originalText;
             e.target.value = ""; // Reset input
+            
+            if (addedCount > 0) {
+                showToast(`${addedCount}件の曲をライブラリに追加しました`);
+            }
             renderLibrary();
         }
 
@@ -851,18 +961,21 @@
             if (e) {
                 e.stopPropagation();
             }
-            if(confirm("この曲をライブラリから削除しますか？")) {
+            
+            const result = await showCustomConfirm("曲の削除", "この曲をライブラリから完全に削除しますか？");
+            if (result) {
                 await db.tracks.delete(id);
                 // Handle current track deleted
                 if (currentQueue[currentIndex] && currentQueue[currentIndex].id === id) {
                     audio.pause();
                     audio.src = '';
                 }
+                showToast("曲を削除しました");
                 renderLibrary();
             }
         }
 
-        // --- STREAMING_CHUNK: Implementing dynamic multi-selection and bulk track deletion ---
+        // --- STREAMING_CHUNK: Managing track multi-selection and bulk actions... ---
         function toggleSelectMode() {
             selectMode = !selectMode;
             selectedTrackIds.clear();
@@ -922,13 +1035,18 @@
             updateSelectedCountUI();
         }
 
-        async function deleteSelectedTracks() {
+        async function confirmBulkDelete() {
             if (selectedTrackIds.size === 0) {
-                alert("曲が選択されていません。");
+                showToast("曲が選択されていません", "error");
                 return;
             }
 
-            if (confirm(`選択された ${selectedTrackIds.size} 件の曲をライブラリから削除しますか？`)) {
+            const result = await showCustomConfirm(
+                "複数曲の削除", 
+                `選択された ${selectedTrackIds.size} 件の曲をライブラリから完全に削除しますか？`
+            );
+            
+            if (result) {
                 const idsToDelete = Array.from(selectedTrackIds);
                 
                 // If currently playing track is in delete list, stop audio
@@ -942,11 +1060,12 @@
                 selectedTrackIds.clear();
                 updateSelectedCountUI();
                 toggleSelectMode(); // Close select mode after deletion
+                showToast("選択した曲を削除しました");
                 renderLibrary();
             }
         }
 
-        // --- STREAMING_CHUNK: Switching views dynamically and updating Navigation highlighters ---
+        // --- STREAMING_CHUNK: Managing SPA view navigation... ---
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hide'));
             if(viewId !== 'focus') {
@@ -980,7 +1099,7 @@
             }
         }
 
-        // --- STREAMING_CHUNK: Dynamic responsive HTML builder for main Library grid ---
+        // --- STREAMING_CHUNK: Rendering primary tracks list dynamically... ---
         async function renderLibrary() {
             const query = document.getElementById('search-input').value.toLowerCase();
             let tracks = await db.tracks.orderBy('addedAt').reverse().toArray();
@@ -1051,7 +1170,7 @@
             });
         }
 
-        // --- STREAMING_CHUNK: Album Grid Builder and detail views ---
+        // --- STREAMING_CHUNK: Rendering Albums Grid... ---
         async function renderAlbums() {
             const tracks = await db.tracks.toArray();
             const albumsMap = {};
@@ -1149,7 +1268,7 @@
             }
         }
 
-        // --- STREAMING_CHUNK: Rendering custom 10-Band Equalizer tuning UI ---
+        // --- STREAMING_CHUNK: Building custom vertical equalizer bands... ---
         function buildEqUI() {
             const container = document.getElementById('eq-sliders');
             frequencies.forEach((freq, idx) => {
@@ -1191,6 +1310,7 @@
             });
         }
 
+        // --- STREAMING_CHUNK: Managing tag editing modals... ---
         // Edit Modal
         const editModal = document.getElementById('edit-modal');
         const editModalContent = document.getElementById('edit-modal-content');
@@ -1227,6 +1347,7 @@
 
             await db.tracks.update(id, { title, artist, album });
             closeEditModal();
+            showToast("タグ情報を更新しました");
             
             if (!document.getElementById('view-library').classList.contains('hide')) {
                 renderLibrary();
