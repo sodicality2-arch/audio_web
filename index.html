@@ -3,26 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    
+    <!-- iOS PWA (Home Screen) Support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Calm Player">
+    <meta name="theme-color" content="#18181b">
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/4f46e5/ffffff?text=C">
+    
     <title>Calm Web Player</title>
     
-    <!-- Tailwind CSS を最初にロードすることで、直後の tailwind.config が正常に動作します -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        zinc: {
-                            800: '#27272a',
-                            900: '#18181b',
-                        },
-                        indigo: {
-                            500: '#6366f1',
-                            600: '#4f46e5',
-                        }
+                        zinc: { 800: '#27272a', 900: '#18181b' },
+                        indigo: { 500: '#6366f1', 600: '#4f46e5' }
                     },
                     fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
                     }
                 }
             }
@@ -37,10 +39,16 @@
 
     <style>
         /* カスタムスクロールバー */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+        /* iOSでのタッチハイライトを無効化し、スムーズスクロールを有効化 */
+        body { 
+            -webkit-tap-highlight-color: transparent; 
+            -webkit-overflow-scrolling: touch;
+        }
 
         /* レンジスライダーのスタイルリセットとカスタマイズ */
         input[type=range] {
@@ -65,14 +73,12 @@
             background: #818cf8;
             cursor: pointer;
             -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
             margin-top: -5px;
             box-shadow: 0 0 5px rgba(0,0,0,0.3);
         }
         input[type=range]:hover::-webkit-slider-thumb { background: #6366f1; }
 
-        /* 縦型スライダー (イコライザ用) - 標準の縦表示を使うことで操作バグを完全に修正 */
+        /* 縦型スライダー (イコライザ用) */
         .vertical-slider-container {
             height: 150px;
             display: flex;
@@ -81,10 +87,9 @@
         }
         .vertical-slider {
             -webkit-appearance: none;
-            -moz-appearance: none;
             appearance: none;
-            writing-mode: vertical-lr; /* 標準の縦型表示 */
-            direction: rtl; /* 上方向をプラスにするため反転 */
+            writing-mode: vertical-lr;
+            direction: rtl;
             width: 8px;
             height: 150px;
             background: #3f3f46;
@@ -93,41 +98,26 @@
         }
         .vertical-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
             width: 18px;
             height: 18px;
             border-radius: 50%;
             background: #818cf8;
             cursor: pointer;
             box-shadow: 0 0 5px rgba(0,0,0,0.3);
-        }
-        .vertical-slider::-webkit-slider-thumb:hover {
-            background: #6366f1;
-        }
-        .vertical-slider::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #818cf8;
-            cursor: pointer;
-            border: none;
-            box-shadow: 0 0 5px rgba(0,0,0,0.3);
-        }
-        .vertical-slider::-moz-range-thumb:hover {
-            background: #6366f1;
         }
 
         /* ユーティリティクラス */
         .hide { display: none !important; }
-        .glass-panel { background: rgba(39, 39, 42, 0.8); backdrop-filter: blur(10px); }
+        .glass-panel { background: rgba(39, 39, 42, 0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); }
         
-        body { -webkit-tap-highlight-color: transparent; }
-
-        /* セーフエリア対応のためのボトムパディング調整 */
-        .safe-pb {
-            padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
-        }
+        /* 📱 iOS Safe Area 対応のパディング設定 */
+        .safe-pt { padding-top: calc(env(safe-area-inset-top) + 0.5rem); }
+        .safe-pl { padding-left: calc(env(safe-area-inset-left) + 0.5rem); }
+        .safe-pr { padding-right: calc(env(safe-area-inset-right) + 0.5rem); }
+        .safe-pb { padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem); }
+        
+        /* シークバーのドラッグエリアを広げてタッチしやすくする */
+        .touch-seek-area { position: absolute; inset: -10px 0; cursor: pointer; z-index: 10; }
     </style>
 </head>
 <body class="bg-zinc-900 text-zinc-200 font-sans h-[100dvh] flex flex-col overflow-hidden selection:bg-indigo-500/30">
@@ -135,78 +125,83 @@
     <div class="flex-1 flex overflow-hidden relative">
         
         <!-- Sidebar Navigation -->
-        <nav id="sidebar" class="w-20 md:w-60 bg-zinc-800 border-r border-zinc-700 flex flex-col transition-all duration-300 z-20">
-            <div class="p-4 flex items-center justify-center md:justify-start gap-3 border-b border-zinc-700 h-16">
+        <nav id="sidebar" class="w-20 md:w-60 bg-zinc-800 border-r border-zinc-700 flex flex-col transition-all duration-300 z-20 safe-pt pl-[env(safe-area-inset-left)]">
+            <div class="p-4 flex items-center justify-center md:justify-start gap-3 border-b border-zinc-700 h-16 shrink-0">
                 <i class="ph-fill ph-music-notes text-indigo-500 text-2xl"></i>
                 <span class="font-bold text-lg hidden md:block tracking-wide">Calm Player</span>
             </div>
             
             <div class="flex-1 overflow-y-auto py-4 flex flex-col gap-2 px-2">
-                <button onclick="switchView('library')" class="nav-btn w-full flex items-center gap-4 p-3 rounded-lg hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white" data-target="library">
+                <button onclick="switchView('library')" class="nav-btn w-full flex items-center gap-4 p-3 rounded-xl hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white active:scale-95" data-target="library">
                     <i class="ph ph-list-music text-xl"></i>
                     <span class="font-medium hidden md:block">すべての曲</span>
                 </button>
-                <button onclick="switchView('albums')" class="nav-btn w-full flex items-center gap-4 p-3 rounded-lg hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white" data-target="albums">
+                <button onclick="switchView('albums')" class="nav-btn w-full flex items-center gap-4 p-3 rounded-xl hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white active:scale-95" data-target="albums">
                     <i class="ph ph-disc text-xl"></i>
                     <span class="font-medium hidden md:block">アルバム</span>
                 </button>
-                <button onclick="switchView('eq')" class="nav-btn w-full flex items-center gap-4 p-3 rounded-lg hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white" data-target="eq">
+                <button onclick="switchView('eq')" class="nav-btn w-full flex items-center gap-4 p-3 rounded-xl hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-white active:scale-95" data-target="eq">
                     <i class="ph ph-sliders text-xl"></i>
                     <span class="font-medium hidden md:block">イコライザ</span>
                 </button>
             </div>
 
             <div class="p-4 border-t border-zinc-700 flex justify-center md:justify-start">
-                <label class="relative w-12 h-12 md:w-full md:h-auto flex items-center justify-center gap-2 p-0 md:p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full md:rounded-lg cursor-pointer transition-colors shadow-lg shrink-0" title="曲を追加">
-                    <i class="ph ph-folder-plus text-xl block"></i>
-                    <span class="font-medium hidden md:block">曲を追加</span>
-                    <!-- iOSで絶対にグレーアウトしないよう、初期の accept 属性は完全に外し、JS側でデバイス別に最適化します -->
+                <label class="relative w-12 h-12 md:w-full md:h-auto flex items-center justify-center gap-2 p-0 md:p-3 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white rounded-full md:rounded-xl cursor-pointer transition-all shadow-lg shrink-0 overflow-hidden" title="曲を追加">
+                    <i class="ph ph-folder-plus text-xl block relative z-10"></i>
+                    <span id="btn-add-text" class="font-bold text-sm hidden md:block relative z-10 truncate">曲を追加</span>
+                    <!-- 🍏 iOS 最適化: public.audio と詳細な拡張子指定でグレーアウトを防止 -->
                     <input type="file" id="file-input" multiple class="absolute opacity-0 w-1 h-1 pointer-events-none" onchange="handleFileSelect(event)">
+                    <!-- Progress background fill -->
+                    <div id="add-progress-bg" class="absolute left-0 top-0 bottom-0 bg-indigo-400/50 w-0 transition-all duration-200 z-0"></div>
                 </label>
             </div>
         </nav>
 
         <!-- Main Content Area -->
-        <main class="flex-1 relative bg-zinc-900 overflow-hidden">
+        <main class="flex-1 relative bg-zinc-900 overflow-hidden safe-pt pr-[env(safe-area-inset-right)]">
             
             <div id="view-library" class="view-panel h-full flex flex-col p-4 md:p-8 overflow-hidden hide">
                 <div class="flex justify-between items-center mb-4 shrink-0">
                     <h1 class="text-2xl md:text-3xl font-bold">すべての曲</h1>
                     <div class="flex items-center gap-3">
-                        <button id="btn-select-mode" onclick="toggleSelectMode()" class="p-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-zinc-300 transition-colors" title="複数選択モード">
+                        <button id="btn-select-mode" onclick="toggleSelectMode()" class="p-2 bg-zinc-800 hover:bg-zinc-700 active:scale-90 rounded-xl text-zinc-300 transition-all" title="複数選択モード">
                             <i class="ph ph-check-square text-xl"></i>
                         </button>
-                        <div class="relative w-36 md:w-64">
+                        <div class="relative w-40 md:w-64">
                             <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"></i>
-                            <input type="text" id="search-input" placeholder="検索..." onkeyup="renderLibrary()" class="w-full bg-zinc-800 border border-zinc-700 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:border-indigo-500 transition-colors text-sm">
+                            <input type="text" id="search-input" placeholder="検索..." onkeyup="renderLibrary()" class="w-full bg-zinc-800 border border-zinc-700 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors text-sm">
                         </div>
                     </div>
                 </div>
 
-                <!-- Bulk action controls (Shown in Selection Mode) -->
-                <div id="bulk-controls" class="bg-zinc-800/80 border border-indigo-500/30 rounded-xl p-3 mb-4 flex items-center justify-between hide shrink-0 animate-fade-in">
-                    <div class="flex items-center gap-2 text-sm text-zinc-300">
-                        <span id="selected-count" class="font-bold text-indigo-400">0</span> 件選択中
+                <!-- Bulk action controls -->
+                <div id="bulk-controls" class="bg-zinc-800/80 border border-indigo-500/30 rounded-2xl p-3 mb-4 flex flex-wrap items-center justify-between gap-3 hide shrink-0 animate-fade-in shadow-lg">
+                    <div class="flex items-center gap-2 text-sm text-zinc-300 px-2">
+                        <span id="selected-count" class="font-bold text-indigo-400 text-lg">0</span> 件選択中
                     </div>
                     <div class="flex gap-2">
-                        <button onclick="selectAllTracks(true)" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold transition-colors">すべて選択</button>
-                        <button onclick="selectAllTracks(false)" class="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg text-xs font-semibold transition-colors">解除</button>
-                        <button onclick="confirmBulkDelete()" class="px-3 py-1.5 bg-red-600/90 hover:bg-red-500 rounded-lg text-xs font-bold text-white transition-colors flex items-center gap-1">
-                            <i class="ph ph-trash"></i> 選択した曲を削除
+                        <button onclick="selectAllTracks(true)" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 active:scale-95 rounded-xl text-xs font-semibold transition-all">すべて選択</button>
+                        <button onclick="selectAllTracks(false)" class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 active:scale-95 rounded-xl text-xs font-semibold transition-all">解除</button>
+                        <button onclick="confirmBulkDelete()" class="px-4 py-2 bg-red-600/90 hover:bg-red-500 active:scale-95 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-1 shadow-md shadow-red-900/20">
+                            <i class="ph ph-trash text-sm"></i> 削除
                         </button>
                     </div>
                 </div>
                 
-                <div class="bg-zinc-800/50 rounded-xl border border-zinc-700 overflow-hidden flex-1 flex flex-col min-h-0">
-                    <div id="library-header-grid" class="grid grid-cols-[auto_1fr_1fr_auto] gap-4 p-4 border-b border-zinc-700 text-sm font-semibold text-zinc-400 sticky top-0 bg-zinc-800 shrink-0 z-10">
+                <div class="bg-zinc-800/40 rounded-2xl border border-zinc-700/50 overflow-hidden flex-1 flex flex-col min-h-0 backdrop-blur-sm">
+                    <div id="library-header-grid" class="grid grid-cols-[auto_1fr_1fr_auto] gap-4 p-4 border-b border-zinc-700/50 text-sm font-semibold text-zinc-400 sticky top-0 bg-zinc-800/90 backdrop-blur shrink-0 z-10">
                         <div class="w-8 text-center" id="library-header-index">#</div>
                         <div>タイトル / アーティスト</div>
                         <div class="hidden md:block">アルバム</div>
                         <div class="w-20 text-center">操作</div>
                     </div>
                     <div id="library-list" class="overflow-y-auto flex-1 p-2 space-y-1">
-                        <!-- Tracks will be rendered here -->
-                        <div class="text-center text-zinc-500 py-10">曲がありません。左下のボタンから追加してください。</div>
+                        <!-- Tracks -->
+                        <div class="text-center text-zinc-500 py-10 flex flex-col items-center justify-center gap-3">
+                            <i class="ph ph-music-notes text-4xl opacity-50"></i>
+                            <p>曲がありません。<br>左下のボタンから追加してください。</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -214,32 +209,33 @@
             <div id="view-albums" class="view-panel h-full flex flex-col p-4 md:p-8 overflow-y-auto hide">
                 <h1 class="text-2xl md:text-3xl font-bold mb-6">アルバム</h1>
                 <div id="albums-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 pb-20">
-                    <!-- Albums will be rendered here -->
+                    <!-- Albums -->
                 </div>
             </div>
 
             <div id="view-album-detail" class="view-panel h-full flex flex-col p-4 md:p-8 overflow-y-auto hide relative">
-                <button onclick="switchView('albums')" class="absolute top-4 left-4 p-2 bg-zinc-800 hover:bg-zinc-700 rounded-full transition-colors z-10 shadow-lg">
+                <button onclick="switchView('albums')" class="absolute top-4 left-4 p-3 bg-zinc-800 hover:bg-zinc-700 active:scale-90 rounded-full transition-all z-10 shadow-lg text-white">
                     <i class="ph ph-caret-left text-xl"></i>
                 </button>
                 
-                <div class="flex flex-col md:flex-row items-center md:items-end gap-6 mb-8 mt-10 md:mt-0">
-                    <div class="w-40 h-40 md:w-56 md:h-56 rounded-xl shadow-2xl overflow-hidden bg-zinc-800 shrink-0">
+                <div class="flex flex-col md:flex-row items-center md:items-end gap-6 mb-8 mt-14 md:mt-0">
+                    <div class="w-48 h-48 md:w-64 md:h-64 rounded-2xl shadow-2xl overflow-hidden bg-zinc-800 shrink-0 relative group">
                         <img id="album-detail-cover" src="" alt="Album Cover" class="w-full h-full object-cover">
+                        <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                     </div>
                     <div class="text-center md:text-left flex-1">
-                        <h2 class="text-sm font-bold text-indigo-400 tracking-wider uppercase mb-2">Album</h2>
-                        <h1 id="album-detail-title" class="text-3xl md:text-5xl font-bold mb-2 break-all">Album Name</h1>
-                        <p id="album-detail-artist" class="text-lg text-zinc-400">Artist Name</p>
-                        <div class="mt-4 flex justify-center md:justify-start">
-                            <button onclick="playAlbum()" class="bg-indigo-600 hover:bg-indigo-500 text-white rounded-full px-8 py-3 font-bold shadow-lg transition-colors flex items-center gap-2">
+                        <h2 class="text-sm font-bold text-indigo-400 tracking-widest uppercase mb-2">Album</h2>
+                        <h1 id="album-detail-title" class="text-3xl md:text-5xl font-black mb-2 break-all leading-tight">Album Name</h1>
+                        <p id="album-detail-artist" class="text-lg md:text-xl text-zinc-300 font-medium">Artist Name</p>
+                        <div class="mt-6 flex justify-center md:justify-start">
+                            <button onclick="playAlbum()" class="bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white rounded-full px-8 py-3.5 font-bold shadow-lg shadow-indigo-900/30 transition-all flex items-center gap-2">
                                 <i class="ph-fill ph-play text-xl"></i> アルバムを再生
                             </button>
                         </div>
                     </div>
                 </div>
                 
-                <div class="bg-zinc-800/50 rounded-xl border border-zinc-700 overflow-hidden">
+                <div class="bg-zinc-800/40 rounded-2xl border border-zinc-700/50 overflow-hidden backdrop-blur-sm">
                     <div id="album-tracks-list" class="p-2 space-y-1">
                         <!-- Album Tracks -->
                     </div>
@@ -247,58 +243,75 @@
             </div>
 
             <div id="view-eq" class="view-panel h-full flex flex-col p-4 md:p-8 overflow-y-auto hide">
-                <h1 class="text-2xl md:text-3xl font-bold mb-2">10バンド イコライザ</h1>
-                <p class="text-zinc-400 mb-6 text-sm">オーディオ出力をカスタマイズします（Web Audio API）</p>
+                <h1 class="text-2xl md:text-3xl font-bold mb-2">イコライザ</h1>
+                <p class="text-zinc-400 mb-6 text-sm">サウンド出力を細かく調整します</p>
 
                 <div class="flex flex-col sm:flex-row gap-4 mb-8">
-                    <div class="bg-zinc-800 border border-zinc-700 rounded-xl p-4 flex-1">
-                        <label class="block text-sm font-medium text-zinc-400 mb-2">プリセット</label>
-                        <select id="eq-preset" onchange="applyEqPreset(this.value)" class="w-full bg-zinc-900 border border-zinc-600 rounded-lg p-2 text-white focus:outline-none focus:border-indigo-500">
-                            <option value="flat">Flat</option>
-                            <option value="bass">Bass Boost</option>
-                            <option value="vocal">Vocal Boost</option>
-                            <option value="rock">Rock</option>
-                            <option value="pop">Pop</option>
-                            <option value="classical">Classical</option>
-                        </select>
+                    <div class="bg-zinc-800/60 border border-zinc-700/50 rounded-2xl p-5 flex-1 backdrop-blur">
+                        <label class="block text-sm font-bold text-zinc-300 mb-3">プリセット</label>
+                        <div class="relative">
+                            <select id="eq-preset" onchange="applyEqPreset(this.value)" class="w-full bg-zinc-900/80 border border-zinc-600 rounded-xl p-3 pl-4 pr-10 text-white focus:outline-none focus:border-indigo-500 appearance-none font-medium">
+                                <option value="flat">Flat (デフォルト)</option>
+                                <option value="bass">Bass Boost (低音強調)</option>
+                                <option value="vocal">Vocal Boost (ボーカル強調)</option>
+                                <option value="rock">Rock</option>
+                                <option value="pop">Pop</option>
+                                <option value="classical">Classical</option>
+                            </select>
+                            <i class="ph ph-caret-down absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none"></i>
+                        </div>
                     </div>
 
-                    <div class="bg-zinc-800 border border-zinc-700 rounded-xl p-4 flex-1 flex flex-col justify-center">
-                        <div class="flex items-center justify-between">
+                    <div class="bg-zinc-800/60 border border-zinc-700/50 rounded-2xl p-5 flex-1 flex flex-col justify-center backdrop-blur">
+                        <div class="flex items-center justify-between gap-4">
                             <div>
-                                <span class="block text-sm font-semibold text-white">高音質EQモード</span>
-                                <span class="block text-xs text-zinc-400">※ iOS/iPad OSでバックグラウンド再生する時はオフを推奨します</span>
+                                <span class="block text-base font-bold text-white mb-1">高音質EQ処理</span>
+                                <span class="block text-xs text-zinc-400 leading-relaxed">※ iOSでバックグラウンド再生時に音が途切れる場合は「オフ」にしてください。</span>
                             </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
+                            <label class="relative inline-flex items-center cursor-pointer shrink-0">
                                 <input type="checkbox" id="eq-toggle" onchange="toggleEqProcessing(this.checked)" class="sr-only peer">
-                                <div class="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                                <div class="w-14 h-7 bg-zinc-900 border border-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-300 peer-checked:after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-indigo-600 peer-checked:border-indigo-500 shadow-inner"></div>
                             </label>
                         </div>
                     </div>
                 </div>
 
-                <div id="eq-sliders-wrapper" class="flex gap-2 md:gap-6 overflow-x-auto pb-4 items-center justify-start md:justify-center px-4 w-full">
-                    <!-- Sliders generated by JS -->
-                    <div id="eq-sliders" class="flex gap-4 md:gap-8 min-w-max"></div>
+                <div id="eq-sliders-wrapper" class="flex gap-2 md:gap-6 overflow-x-auto pb-6 items-center justify-start md:justify-center px-4 w-full transition-opacity duration-300">
+                    <div id="eq-sliders" class="flex gap-5 md:gap-8 min-w-max px-2"></div>
                 </div>
             </div>
 
-            <div id="view-focus" class="view-panel absolute inset-0 bg-zinc-900 z-40 flex flex-col items-center justify-center p-8 hide transition-opacity duration-300">
-                <button onclick="toggleFocusMode()" class="absolute top-8 right-8 p-3 bg-zinc-800 hover:bg-zinc-700 rounded-full transition-colors">
-                    <i class="ph ph-corners-in text-2xl"></i>
+            <!-- 🍏 没入感MAXの Focus Mode -->
+            <div id="view-focus" class="view-panel absolute inset-0 bg-zinc-900 z-40 flex flex-col items-center justify-center p-8 hide transition-opacity duration-500 overflow-hidden">
+                <!-- 背景の巨大ブラー -->
+                <div class="absolute inset-0 z-0 pointer-events-none">
+                    <img id="focus-bg-blur" src="https://placehold.co/512x512/27272a/e4e4e7?text=Music" class="w-full h-full object-cover blur-[80px] opacity-30 transform scale-125 transition-all duration-1000">
+                    <div class="absolute inset-0 bg-zinc-900/40"></div>
+                </div>
+
+                <button onclick="toggleFocusMode()" class="absolute top-8 right-8 p-4 bg-zinc-800/40 hover:bg-zinc-700/60 backdrop-blur-md active:scale-90 rounded-full transition-all z-20 text-white">
+                    <i class="ph ph-caret-down text-2xl"></i>
                 </button>
                 
-                <div class="w-64 h-64 md:w-96 md:h-96 rounded-2xl shadow-2xl overflow-hidden mb-8 relative group">
-                    <img id="focus-cover" src="https://placehold.co/512x512/27272a/e4e4e7?text=Music" class="w-full h-full object-cover transition-transform duration-700">
-                    <div class="absolute inset-0 border border-white/10 rounded-2xl pointer-events-none"></div>
-                </div>
-                
-                <h2 id="focus-title" class="text-2xl md:text-4xl font-bold mb-2 text-center break-all w-full max-w-2xl">Not Playing</h2>
-                <p id="focus-artist" class="text-lg md:text-xl text-zinc-400 text-center">Artist</p>
-                
-                <!-- Focus mode visualizer mock -->
-                <div class="flex gap-1 mt-10 h-10 items-end justify-center w-full opacity-50" id="visualizer-bars">
-                    <!-- Bars inserted by JS -->
+                <div class="z-10 flex flex-col items-center w-full max-w-lg">
+                    <div class="w-64 h-64 md:w-[400px] md:h-[400px] rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden mb-10 relative group transform transition-transform duration-700" id="focus-cover-container">
+                        <img id="focus-cover" src="https://placehold.co/512x512/27272a/e4e4e7?text=Music" class="w-full h-full object-cover transition-transform duration-700">
+                        <!-- 光沢オーバーレイ -->
+                        <div class="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none"></div>
+                        <!-- スワイプ案内（初回のみ表示されるイメージ） -->
+                        <div class="absolute inset-0 flex items-center justify-between px-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            <div class="w-10 h-10 rounded-full bg-black/30 backdrop-blur flex items-center justify-center text-white/70"><i class="ph ph-caret-left text-xl"></i></div>
+                            <div class="w-10 h-10 rounded-full bg-black/30 backdrop-blur flex items-center justify-center text-white/70"><i class="ph ph-caret-right text-xl"></i></div>
+                        </div>
+                    </div>
+                    
+                    <h2 id="focus-title" class="text-3xl md:text-4xl font-black mb-3 text-center break-all w-full leading-tight text-white drop-shadow-md">Not Playing</h2>
+                    <p id="focus-artist" class="text-xl md:text-2xl text-zinc-300 font-medium text-center drop-shadow">Artist</p>
+                    
+                    <!-- Focus mode visualizer -->
+                    <div class="flex gap-1.5 mt-12 h-12 items-end justify-center w-full opacity-60" id="visualizer-bars">
+                        <!-- Bars inserted by JS -->
+                    </div>
                 </div>
             </div>
 
@@ -306,125 +319,132 @@
     </div>
 
     <!-- Player Bottom Bar -->
-    <div class="h-32 md:h-24 bg-zinc-800 border-t border-zinc-700 flex flex-col relative z-50 shrink-0 safe-pb">
+    <div class="h-36 md:h-24 bg-zinc-800/95 backdrop-blur-xl border-t border-zinc-700/80 flex flex-col relative z-50 shrink-0 safe-pb pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] shadow-[0_-10px_30px_rgba(0,0,0,0.3)]">
         
-        <!-- Progress Bar (Absolute Top) -->
-        <div class="absolute top-0 left-0 right-0 h-1 md:h-2 -mt-1 md:-mt-1 group cursor-pointer" onclick="seekClick(event)">
-            <div class="w-full h-full bg-zinc-700 relative">
-                <div id="progress-bar" class="h-full bg-indigo-500 w-0 relative">
-                    <div class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow opacity-0 group-hover:opacity-100 transition-opacity translate-x-1.5"></div>
+        <!-- Progress Bar -->
+        <div class="absolute top-0 left-0 right-0 h-1.5 md:h-2 -mt-1.5 md:-mt-1 group">
+            <div class="w-full h-full bg-zinc-900/50 relative overflow-hidden">
+                <div id="progress-bar" class="h-full bg-indigo-500 w-0 relative transition-all duration-75">
+                    <div class="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity translate-x-2"></div>
                 </div>
             </div>
+            <!-- ドラッグ用の広めの透明エリア -->
+            <div class="touch-seek-area" id="seek-area"></div>
         </div>
 
-        <div class="flex-1 flex items-center justify-between px-4 md:px-6 h-full">
+        <div class="flex-1 flex flex-col md:flex-row items-center justify-between px-4 md:px-6 h-full py-2 md:py-0">
             
             <!-- Now Playing Info -->
-            <div class="flex items-center gap-3 md:gap-4 w-1/3 min-w-0">
-                <div class="w-12 h-12 md:w-14 md:h-14 rounded-lg overflow-hidden bg-zinc-700 shrink-0 shadow-md">
-                    <img id="player-cover" src="https://placehold.co/100x100/27272a/e4e4e7?text=♪" class="w-full h-full object-cover">
+            <div class="flex items-center gap-4 w-full md:w-1/3 min-w-0 mb-2 md:mb-0 cursor-pointer" onclick="if(!focusMode) toggleFocusMode()">
+                <div class="w-12 h-12 md:w-14 md:h-14 rounded-xl overflow-hidden bg-zinc-900 shrink-0 shadow-md relative group">
+                    <img id="player-cover" src="https://placehold.co/100x100/27272a/e4e4e7?text=♪" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110">
+                    <div class="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <i class="ph ph-arrows-out-simple text-white"></i>
+                    </div>
                 </div>
                 <div class="min-w-0 flex-1">
-                    <div id="player-title" class="font-bold text-sm md:text-base truncate">タイトル未設定</div>
+                    <div id="player-title" class="font-bold text-sm md:text-base truncate text-white">タイトル未設定</div>
                     <div id="player-artist" class="text-xs md:text-sm text-zinc-400 truncate">アーティスト</div>
+                </div>
+                <!-- スマホ用時間表示 -->
+                <div class="flex flex-col text-right text-[10px] text-zinc-500 font-mono md:hidden shrink-0">
+                    <span id="time-current-mobile">0:00</span>
+                    <span id="time-total-mobile">0:00</span>
                 </div>
             </div>
 
             <!-- Controls -->
-            <div class="flex flex-col items-center justify-center w-1/3">
-                <div class="flex items-center gap-3 md:gap-6 mb-1 md:mb-0">
-                    <button onclick="toggleShuffle()" id="btn-shuffle" class="text-zinc-400 hover:text-white transition-colors p-2">
-                        <i class="ph ph-shuffle text-lg md:text-xl"></i>
+            <div class="flex flex-col items-center justify-center w-full md:w-1/3">
+                <div class="flex items-center justify-center gap-5 md:gap-8 w-full max-w-[280px]">
+                    <button onclick="toggleShuffle()" id="btn-shuffle" class="text-zinc-400 hover:text-white active:scale-90 transition-all p-2">
+                        <i class="ph ph-shuffle text-xl"></i>
                     </button>
-                    <button onclick="playPrev()" class="text-zinc-200 hover:text-white transition-colors p-2">
-                        <i class="ph-fill ph-skip-back text-xl md:text-2xl"></i>
+                    <button onclick="playPrev()" class="text-zinc-200 hover:text-white active:scale-90 transition-all p-2">
+                        <i class="ph-fill ph-skip-back text-2xl md:text-3xl"></i>
                     </button>
-                    <button onclick="togglePlay()" id="btn-play" class="w-10 h-10 md:w-14 md:h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full flex items-center justify-center shadow-lg transition-transform active:scale-95 shrink-0">
-                        <i class="ph-fill ph-play text-xl md:text-2xl ml-1"></i>
+                    <button onclick="togglePlay()" id="btn-play" class="w-14 h-14 md:w-16 md:h-16 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 active:scale-95 text-white rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(79,70,229,0.4)] transition-all shrink-0">
+                        <i class="ph-fill ph-play text-2xl md:text-3xl ml-1"></i>
                     </button>
-                    <button onclick="playNext()" class="text-zinc-200 hover:text-white transition-colors p-2">
-                        <i class="ph-fill ph-skip-forward text-xl md:text-2xl"></i>
+                    <button onclick="playNext()" class="text-zinc-200 hover:text-white active:scale-90 transition-all p-2">
+                        <i class="ph-fill ph-skip-forward text-2xl md:text-3xl"></i>
                     </button>
-                    <button onclick="toggleRepeat()" id="btn-repeat" class="text-zinc-400 hover:text-white transition-colors p-2">
-                        <i class="ph ph-repeat text-lg md:text-xl"></i>
+                    <button onclick="toggleRepeat()" id="btn-repeat" class="text-zinc-400 hover:text-white active:scale-90 transition-all p-2 relative">
+                        <i class="ph ph-repeat text-xl"></i>
                     </button>
                 </div>
-                <div class="flex items-center gap-2 text-xs text-zinc-400 w-full max-w-md hidden md:flex mt-1">
+                <!-- PC用時間表示 -->
+                <div class="items-center gap-3 text-xs text-zinc-400 w-full max-w-md hidden md:flex mt-2 font-mono">
                     <span id="time-current">0:00</span>
                     <div class="flex-1"></div>
                     <span id="time-total">0:00</span>
                 </div>
             </div>
 
-            <!-- Right Controls (Volume, Focus Mode) -->
-            <div class="flex items-center justify-end gap-3 md:gap-4 w-1/3">
-                <div class="hidden md:flex items-center gap-2 w-32">
-                    <i class="ph ph-speaker-high text-zinc-400"></i>
+            <!-- Right Controls -->
+            <div class="hidden md:flex items-center justify-end gap-4 w-1/3">
+                <div class="flex items-center gap-3 w-36 bg-zinc-900/50 px-3 py-1.5 rounded-full">
+                    <i class="ph ph-speaker-high text-zinc-400 text-sm"></i>
                     <input type="range" id="volume-slider" min="0" max="1" step="0.01" value="0.5" oninput="setVolume(this.value)">
                 </div>
-                <button onclick="toggleFocusMode()" class="text-zinc-400 hover:text-white transition-colors p-2 md:bg-zinc-700 md:rounded-full">
-                    <i class="ph ph-corners-out text-xl md:text-lg"></i>
+                <button onclick="toggleFocusMode()" class="text-zinc-300 hover:text-white bg-zinc-700/50 hover:bg-zinc-600 active:scale-90 transition-all p-2.5 rounded-full" title="フルスクリーン">
+                    <i class="ph ph-corners-out text-lg"></i>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Edit Metadata Modal -->
-    <div id="edit-modal" class="absolute inset-0 bg-black/60 glass-panel hide flex items-center justify-center z-[100] p-4 opacity-0 transition-opacity duration-200">
-        <div class="bg-zinc-800 border border-zinc-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden transform scale-95 transition-transform duration-200" id="edit-modal-content">
-            <div class="p-6 border-b border-zinc-700 flex justify-between items-center">
-                <h2 class="text-xl font-bold flex items-center gap-2"><i class="ph ph-pencil-simple text-indigo-400"></i> タグ編集</h2>
-                <button onclick="closeEditModal()" class="text-zinc-400 hover:text-white"><i class="ph ph-x text-xl"></i></button>
+    <!-- Modals (Edit, Confirm, Toast) -->
+    <div id="edit-modal" class="absolute inset-0 glass-panel hide flex items-center justify-center z-[100] p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-zinc-800 border border-zinc-700/80 rounded-3xl w-full max-w-md shadow-2xl flex flex-col overflow-hidden transform scale-95 transition-all duration-300" id="edit-modal-content">
+            <div class="p-6 border-b border-zinc-700/50 flex justify-between items-center bg-zinc-800/90">
+                <h2 class="text-xl font-bold flex items-center gap-2"><i class="ph-fill ph-pencil-simple text-indigo-400"></i> タグ編集</h2>
+                <button onclick="closeEditModal()" class="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-600 transition-colors"><i class="ph ph-x"></i></button>
             </div>
-            <div class="p-6 space-y-4">
+            <div class="p-6 space-y-5">
                 <input type="hidden" id="edit-id">
                 <div>
-                    <label class="block text-sm font-medium text-zinc-400 mb-1">タイトル</label>
-                    <input type="text" id="edit-title" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+                    <label class="block text-sm font-bold text-zinc-400 mb-1.5">タイトル</label>
+                    <input type="text" id="edit-title" class="w-full bg-zinc-900/80 border border-zinc-700 rounded-xl p-3.5 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-zinc-400 mb-1">アーティスト</label>
-                    <input type="text" id="edit-artist" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+                    <label class="block text-sm font-bold text-zinc-400 mb-1.5">アーティスト</label>
+                    <input type="text" id="edit-artist" class="w-full bg-zinc-900/80 border border-zinc-700 rounded-xl p-3.5 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-zinc-400 mb-1">アルバム</label>
-                    <input type="text" id="edit-album" class="w-full bg-zinc-900 border border-zinc-700 rounded-lg p-3 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+                    <label class="block text-sm font-bold text-zinc-400 mb-1.5">アルバム</label>
+                    <input type="text" id="edit-album" class="w-full bg-zinc-900/80 border border-zinc-700 rounded-xl p-3.5 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-medium">
                 </div>
             </div>
-            <div class="p-4 bg-zinc-800/50 border-t border-zinc-700 flex justify-end gap-3">
-                <button onclick="closeEditModal()" class="px-5 py-2 rounded-lg font-medium text-zinc-300 hover:bg-zinc-700 transition-colors">キャンセル</button>
-                <button onclick="saveEdit()" class="px-5 py-2 rounded-lg font-medium bg-indigo-600 hover:bg-indigo-500 text-white shadow-md transition-colors">保存</button>
+            <div class="p-5 bg-zinc-800/80 border-t border-zinc-700/50 flex justify-end gap-3">
+                <button onclick="closeEditModal()" class="px-6 py-2.5 rounded-xl font-semibold text-zinc-300 hover:bg-zinc-700 transition-all active:scale-95">キャンセル</button>
+                <button onclick="saveEdit()" class="px-6 py-2.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition-all active:scale-95">保存する</button>
             </div>
         </div>
     </div>
 
-    <!-- Custom Confirmation Modal (Replacing standard confirm) -->
-    <div id="confirm-modal" class="absolute inset-0 bg-black/65 glass-panel hide flex items-center justify-center z-[120] p-4 opacity-0 transition-opacity duration-200">
-        <div class="bg-zinc-800 border border-zinc-700 rounded-2xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden transform scale-95 transition-transform duration-200" id="confirm-modal-content">
-            <div class="p-6">
-                <div class="w-12 h-12 bg-red-500/15 text-red-400 rounded-full flex items-center justify-center mb-4">
-                    <i class="ph ph-warning text-2xl"></i>
+    <div id="confirm-modal" class="absolute inset-0 glass-panel hide flex items-center justify-center z-[120] p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-zinc-800 border border-zinc-700/80 rounded-3xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden transform scale-95 transition-all duration-300" id="confirm-modal-content">
+            <div class="p-6 text-center pt-8">
+                <div class="w-16 h-16 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mx-auto mb-5">
+                    <i class="ph-fill ph-warning-circle text-4xl"></i>
                 </div>
-                <h3 id="confirm-title" class="text-lg font-bold text-white mb-2">確認</h3>
-                <p id="confirm-desc" class="text-zinc-400 text-sm leading-relaxed">この操作は取り消せません。</p>
+                <h3 id="confirm-title" class="text-xl font-black text-white mb-2">確認</h3>
+                <p id="confirm-desc" class="text-zinc-400 text-sm leading-relaxed font-medium">この操作は取り消せません。</p>
             </div>
-            <div class="p-4 bg-zinc-800/50 border-t border-zinc-700 flex justify-end gap-3">
-                <button id="confirm-cancel-btn" class="px-4 py-2 rounded-lg text-sm font-semibold text-zinc-400 hover:bg-zinc-700 transition-colors">キャンセル</button>
-                <button id="confirm-ok-btn" class="px-4 py-2 rounded-lg text-sm font-bold bg-red-600 hover:bg-red-500 text-white transition-colors">削除する</button>
+            <div class="p-4 bg-zinc-800/80 border-t border-zinc-700/50 flex gap-3">
+                <button id="confirm-cancel-btn" class="flex-1 py-3 rounded-xl text-sm font-bold text-zinc-300 bg-zinc-700 hover:bg-zinc-600 transition-all active:scale-95">キャンセル</button>
+                <button id="confirm-ok-btn" class="flex-1 py-3 rounded-xl text-sm font-bold bg-red-600 hover:bg-red-500 text-white transition-all active:scale-95 shadow-lg shadow-red-900/30">削除する</button>
             </div>
         </div>
     </div>
 
-    <!-- Custom Toast Notification Container (Replacing standard alert) -->
-    <div id="toast-container" class="absolute top-4 right-4 z-[150] flex flex-col gap-2 pointer-events-none">
-        <!-- Dynamic toasts will inject here -->
-    </div>
+    <div id="toast-container" class="absolute top-4 right-4 md:top-8 md:right-8 z-[150] flex flex-col gap-3 pointer-events-none safe-pt safe-pr"></div>
 
     <script>
-        // --- Database Setup using Dexie.js ---
+        // --- Database Setup ---
         const db = new Dexie("CalmPlayerDB");
         db.version(1).stores({
-            tracks: '++id, title, artist, album, addedAt' // blob and cover are stored but not indexed
+            tracks: '++id, title, artist, album, addedAt'
         });
 
         // --- Application State ---
@@ -434,21 +454,19 @@
         let isShuffle = false;
         let repeatMode = 0; // 0: None, 1: All, 2: One
         let focusMode = false;
-        
         let selectMode = false;
         let selectedTrackIds = new Set();
         
         let audioCtx = null;
         let trackSource = null;
         let eqBands = [];
-        let eqEnabled = false; // iOS background support: bypass EQ by default
+        let eqEnabled = false;
         const frequencies = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
 
-        // --- Core Audio Element ---
         const audio = new Audio();
         let currentObjectUrl = null;
 
-        // --- DOM Elements Cache ---
+        // --- DOM Cache ---
         const els = {
             playBtn: document.getElementById('btn-play'),
             shuffleBtn: document.getElementById('btn-shuffle'),
@@ -456,22 +474,25 @@
             progressBar: document.getElementById('progress-bar'),
             timeCurrent: document.getElementById('time-current'),
             timeTotal: document.getElementById('time-total'),
+            timeCurrentMobile: document.getElementById('time-current-mobile'),
+            timeTotalMobile: document.getElementById('time-total-mobile'),
             cover: document.getElementById('player-cover'),
             title: document.getElementById('player-title'),
             artist: document.getElementById('player-artist'),
             focusCover: document.getElementById('focus-cover'),
+            focusCoverContainer: document.getElementById('focus-cover-container'),
+            focusBgBlur: document.getElementById('focus-bg-blur'),
             focusTitle: document.getElementById('focus-title'),
             focusArtist: document.getElementById('focus-artist'),
             eqToggle: document.getElementById('eq-toggle'),
         };
 
-        // --- Confirmation Modal Promise Handler ---
+        // --- Toast & Confirm ---
         let confirmPromiseResolve = null;
 
         function showCustomConfirm(title, description) {
             document.getElementById('confirm-title').innerText = title;
             document.getElementById('confirm-desc').innerText = description;
-            
             const modal = document.getElementById('confirm-modal');
             const content = document.getElementById('confirm-modal-content');
             
@@ -480,9 +501,7 @@
             modal.classList.remove('opacity-0');
             content.classList.remove('scale-95');
 
-            return new Promise((resolve) => {
-                confirmPromiseResolve = resolve;
-            });
+            return new Promise(resolve => { confirmPromiseResolve = resolve; });
         }
 
         function closeConfirmModal(result) {
@@ -490,10 +509,7 @@
             const content = document.getElementById('confirm-modal-content');
             modal.classList.add('opacity-0');
             content.classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.add('hide');
-            }, 200);
-            
+            setTimeout(() => { modal.classList.add('hide'); }, 300);
             if (confirmPromiseResolve) {
                 confirmPromiseResolve(result);
                 confirmPromiseResolve = null;
@@ -503,103 +519,80 @@
         document.getElementById('confirm-ok-btn').addEventListener('click', () => closeConfirmModal(true));
         document.getElementById('confirm-cancel-btn').addEventListener('click', () => closeConfirmModal(false));
 
-        // --- Toast Notifications ---
         function showToast(message, type = 'info') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            toast.className = `px-4 py-3 rounded-xl shadow-xl border backdrop-blur-md text-sm font-semibold transition-all duration-300 transform translate-x-12 opacity-0 flex items-center gap-2 pointer-events-auto max-w-sm ${
-                type === 'error' 
-                ? 'bg-red-950/80 border-red-500/30 text-red-200' 
-                : 'bg-zinc-800/90 border-zinc-700 text-zinc-100'
+            toast.className = `px-5 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-xl text-sm font-bold transition-all duration-400 transform translate-x-12 opacity-0 flex items-center gap-3 pointer-events-auto max-w-[90vw] md:max-w-sm ${
+                type === 'error' ? 'bg-red-950/90 border-red-500/40 text-red-100' : 'bg-zinc-800/90 border-zinc-600/50 text-white'
             }`;
-            
-            const icon = type === 'error' ? '<i class="ph-fill ph-warning-circle text-red-400 text-lg"></i>' : '<i class="ph-fill ph-info text-indigo-400 text-lg"></i>';
+            const icon = type === 'error' ? '<i class="ph-fill ph-warning-circle text-red-400 text-xl"></i>' : '<i class="ph-fill ph-check-circle text-indigo-400 text-xl"></i>';
             toast.innerHTML = `${icon} <span>${message}</span>`;
             container.appendChild(toast);
-
-            // Animate In
             void toast.offsetWidth;
             toast.classList.remove('translate-x-12', 'opacity-0');
-
-            // Remove after delay
             setTimeout(() => {
-                toast.classList.add('translate-x-12', 'opacity-0');
-                setTimeout(() => {
-                    toast.remove();
-                }, 300);
+                toast.classList.add('translate-y-[-10px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 400);
             }, 3000);
         }
 
-        // --- STREAMING_CHUNK: Device specific optimizations on startup... ---
-        /**
-         * Dynamic file input optimization for iOS / iPadOS
-         * Prevents the greyed-out native file dialogue bug by removing raw extension lists.
-         */
+        // --- 🍏 iOS Optimization ---
         function optimizeForIOS() {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
-                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
             const fileInput = document.getElementById('file-input');
             
+            if (fileInput) {
+                // iOSのファイルアプリで確実にオーディオを選択可能にする最強の属性セット
+                fileInput.setAttribute('accept', 'audio/*, public.audio, .mp3, .m4a, .aac, .wav, .ogg, .flac, .aiff, .aif, .m4b, .opus');
+            }
+
             if (isIOS) {
-                if (fileInput) {
-                    // 【超重要】iOS/iPadOS では、accept 属性に少しでも audio/* や拡張子を記述すると、
-                    // iCloud等ファイルアプリ上であらゆるオーディオファイル（FLAC等を含む）がグレーアウトして選択不能になります。
-                    // 唯一の解決法は accept 属性を「完全に除去」することです。選択後のバリデーションでセキュリティは保たれます。
-                    fileInput.removeAttribute('accept');
-                }
-                // Default EQ off for seamless background playback
+                // バックグラウンド再生の安定化のためデフォルトオフ
                 eqEnabled = false;
                 if (els.eqToggle) els.eqToggle.checked = false;
                 toggleSlidersVisualState(false);
             } else {
-                if (fileInput) {
-                    fileInput.setAttribute('accept', '.mp3,.m4a,.aac,.wav,.ogg,.flac,.aiff,.aif,.m4b,.opus,audio/*');
-                }
                 eqEnabled = true;
                 if (els.eqToggle) els.eqToggle.checked = true;
                 toggleSlidersVisualState(true);
             }
         }
 
-        // Initialize on load
         window.addEventListener('DOMContentLoaded', async () => {
-            setupNavigation();
             buildEqUI();
             optimizeForIOS();
+            setupProgressBar();
+            setupSwipe();
             await renderLibrary();
             switchView('library');
             setupAudioEvents();
             
-            // Mock visualizer for focus mode
+            // Visualizer setup
             const vis = document.getElementById('visualizer-bars');
-            for(let i=0; i<20; i++){
+            for(let i=0; i<24; i++){
                 const bar = document.createElement('div');
-                bar.className = 'w-2 bg-indigo-500 rounded-t-sm transition-all duration-100';
-                bar.style.height = '10%';
+                bar.className = 'w-1.5 md:w-2 bg-white/80 rounded-full transition-all duration-150';
+                bar.style.height = '15%';
                 vis.appendChild(bar);
             }
         });
 
-        // iOS Safari AudioContext resume requirement (Trigger on raw synchronous user interaction)
-        document.body.addEventListener('touchstart', forceResumeAudioContext);
-        document.body.addEventListener('click', forceResumeAudioContext);
+        document.body.addEventListener('touchstart', forceResumeAudioContext, {passive: true});
+        document.body.addEventListener('click', forceResumeAudioContext, {passive: true});
 
         function forceResumeAudioContext() {
-            if (!audioCtx) {
-                initAudioContext();
-            }
+            if (!audioCtx) initAudioContext();
             if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(e => console.warn("Failed to resume AudioContext during touch:", e));
+                audioCtx.resume().catch(e => console.warn(e));
             }
         }
 
-        // --- STREAMING_CHUNK: Web Audio Routing and EQ state controllers... ---
+        // --- Web Audio API (EQ) ---
         function initAudioContext() {
-            if (audioCtx) return; // Never recreate or multiple source nodes will crash standard routing
+            if (audioCtx) return;
             try {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 trackSource = audioCtx.createMediaElementSource(audio);
-                
                 eqBands = [];
                 let prevNode = trackSource;
                 frequencies.forEach(freq => {
@@ -612,24 +605,13 @@
                     prevNode.connect(filter);
                     prevNode = filter;
                 });
-
-                // Apply initial sliders to BiquadFilters
                 const sliders = document.querySelectorAll('.vertical-slider');
                 sliders.forEach((slider, idx) => {
-                    if (eqBands[idx]) {
-                        eqBands[idx].gain.value = parseFloat(slider.value) || 0;
-                    }
+                    if (eqBands[idx]) eqBands[idx].gain.value = parseFloat(slider.value) || 0;
                 });
-
-                // Set initial connection based on bypass setting
                 updateAudioGraph();
-
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-            } catch (e) {
-                console.warn("Web Audio API initialization bypassed or failed.", e);
-            }
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch (e) { console.warn("AudioContext init failed", e); }
         }
 
         function updateAudioGraph() {
@@ -637,214 +619,194 @@
             try {
                 trackSource.disconnect();
                 if (eqEnabled) {
-                    // Connect with filters enabled
                     let prevNode = trackSource;
-                    eqBands.forEach(filter => {
-                        prevNode.connect(filter);
-                        prevNode = filter;
-                    });
+                    eqBands.forEach(filter => { prevNode.connect(filter); prevNode = filter; });
                     prevNode.connect(audioCtx.destination);
                 } else {
-                    // Bypass direct output connection to the destination
                     trackSource.connect(audioCtx.destination);
                 }
-            } catch (e) {
-                console.warn("Failed to configure audio graph routing:", e);
-            }
+            } catch (e) { console.warn(e); }
         }
 
         function toggleEqProcessing(enabled) {
             eqEnabled = enabled;
             toggleSlidersVisualState(enabled);
-
-            if (!audioCtx) {
-                initAudioContext();
-            } else {
-                updateAudioGraph();
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-            }
+            if (!audioCtx) initAudioContext();
+            else { updateAudioGraph(); if (audioCtx.state === 'suspended') audioCtx.resume(); }
         }
 
         function toggleSlidersVisualState(enabled) {
             const wrapper = document.getElementById('eq-sliders-wrapper');
-            if (wrapper) {
-                if (enabled) {
-                    wrapper.classList.remove('opacity-30', 'pointer-events-none');
-                } else {
-                    wrapper.classList.add('opacity-30', 'pointer-events-none');
-                }
-            }
+            if (wrapper) wrapper.style.opacity = enabled ? '1' : '0.3';
+            if (wrapper) wrapper.style.pointerEvents = enabled ? 'auto' : 'none';
         }
 
-        // --- STREAMING_CHUNK: Setup HTML Audio tag event binds... ---
+        // --- Seek & Swipe 🍏 ---
+        let isDragging = false;
+
+        function setupProgressBar() {
+            const area = document.getElementById('seek-area');
+            const update = (e) => {
+                if (!audio.duration) return;
+                const rect = area.getBoundingClientRect();
+                let clientX = e.clientX;
+                if (e.touches && e.touches.length > 0) clientX = e.touches[0].clientX;
+                else if (e.changedTouches && e.changedTouches.length > 0) clientX = e.changedTouches[0].clientX;
+                
+                let pos = (clientX - rect.left) / rect.width;
+                pos = Math.max(0, Math.min(1, pos));
+                els.progressBar.style.width = `${pos * 100}%`;
+                return pos;
+            };
+
+            const startDrag = (e) => { isDragging = true; update(e); };
+            const moveDrag = (e) => { if(isDragging) update(e); };
+            const endDrag = (e) => {
+                if(isDragging) {
+                    const pos = update(e);
+                    if(audio.duration && pos !== undefined) audio.currentTime = pos * audio.duration;
+                    isDragging = false;
+                }
+            };
+
+            area.addEventListener('mousedown', startDrag);
+            document.addEventListener('mousemove', moveDrag);
+            document.addEventListener('mouseup', endDrag);
+            area.addEventListener('touchstart', startDrag, {passive: true});
+            document.addEventListener('touchmove', moveDrag, {passive: true});
+            document.addEventListener('touchend', endDrag, {passive: true});
+        }
+
+        function setupSwipe() {
+            const focusView = document.getElementById('view-focus');
+            let startX = 0;
+            focusView.addEventListener('touchstart', e => { startX = e.changedTouches[0].screenX; }, {passive: true});
+            focusView.addEventListener('touchend', e => {
+                const endX = e.changedTouches[0].screenX;
+                if (endX < startX - 60) playNext();
+                if (endX > startX + 60) playPrev();
+            }, {passive: true});
+        }
+
+        // --- Audio Events & Playback ---
         function setupAudioEvents() {
             audio.addEventListener('timeupdate', () => {
                 if (!audio.duration) return;
-                const ratio = audio.currentTime / audio.duration;
-                els.progressBar.style.width = `${ratio * 100}%`;
-                els.timeCurrent.innerText = formatTime(audio.currentTime);
+                if (!isDragging) {
+                    els.progressBar.style.width = `${(audio.currentTime / audio.duration) * 100}%`;
+                }
+                const timeStr = formatTime(audio.currentTime);
+                els.timeCurrent.innerText = timeStr;
+                els.timeCurrentMobile.innerText = timeStr;
                 
-                if (focusMode && isPlaying && Math.random() > 0.8) {
-                    // Animate mock visualizer
+                if (focusMode && isPlaying && Math.random() > 0.7) {
                     const bars = document.getElementById('visualizer-bars').children;
-                    for(let i=0; i<bars.length; i++){
-                        bars[i].style.height = `${Math.random() * 80 + 20}%`;
-                    }
+                    for(let i=0; i<bars.length; i++) bars[i].style.height = `${Math.random() * 85 + 15}%`;
                 }
             });
 
             audio.addEventListener('loadedmetadata', () => {
-                els.timeTotal.innerText = formatTime(audio.duration);
+                const totalStr = formatTime(audio.duration);
+                els.timeTotal.innerText = totalStr;
+                els.timeTotalMobile.innerText = totalStr;
             });
 
             audio.addEventListener('ended', () => {
-                if (repeatMode === 2) {
-                    audio.currentTime = 0;
-                    audio.play().catch(e => console.warn("Failed to replay ended track:", e));
-                } else {
-                    playNext();
-                }
+                if (repeatMode === 2) { audio.currentTime = 0; audio.play().catch(e=>console.warn(e)); }
+                else playNext();
             });
 
             audio.addEventListener('play', () => {
                 isPlaying = true;
-                els.playBtn.innerHTML = '<i class="ph-fill ph-pause text-2xl"></i>';
-                els.focusCover.classList.add('scale-105');
-                if(audioCtx && audioCtx.state === 'suspended') {
-                    audioCtx.resume().catch(e => console.warn(e));
-                }
+                els.playBtn.innerHTML = '<i class="ph-fill ph-pause text-2xl md:text-3xl"></i>';
+                els.focusCoverContainer.classList.add('scale-105', 'shadow-[0_30px_60px_rgba(0,0,0,0.8)]');
+                if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             });
 
             audio.addEventListener('pause', () => {
                 isPlaying = false;
-                els.playBtn.innerHTML = '<i class="ph-fill ph-play text-2xl ml-1"></i>';
-                els.focusCover.classList.remove('scale-105');
+                els.playBtn.innerHTML = '<i class="ph-fill ph-play text-2xl md:text-3xl ml-1"></i>';
+                els.focusCoverContainer.classList.remove('scale-105', 'shadow-[0_30px_60px_rgba(0,0,0,0.8)]');
+                
+                // 停止時はビジュアライザを下げる
+                const bars = document.getElementById('visualizer-bars').children;
+                for(let i=0; i<bars.length; i++) bars[i].style.height = '15%';
             });
         }
 
-        // --- STREAMING_CHUNK: Core audio playback controller with iOS touch unlock routing... ---
         async function playTrack(id, queueArray = null) {
-            // 【重要】iOS Safariの自動再生制限を突破するための「二段階アンロックプロセス」
-            // ユーザーによるクリックイベントの同期的スタック内でダミー再生を呼び、システムロックを解除します
-            audio.play().then(() => {
-                audio.pause();
-            }).catch(() => {
-                audio.load();
-            });
+            // iOS Audio unlock
+            audio.play().then(()=>audio.pause()).catch(()=>audio.load());
+            if (!audioCtx) initAudioContext();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 
-            // Guarantee that AudioContext is resumed immediately inside click stack
-            if (!audioCtx) {
-                initAudioContext();
-            }
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(e => console.warn("Sync resume failed:", e));
-            }
-
-            if (queueArray) {
-                currentQueue = queueArray;
-                currentIndex = currentQueue.findIndex(t => t.id === id);
-            } else {
-                currentIndex = currentQueue.findIndex(t => t.id === id);
-            }
-
+            if (queueArray) currentQueue = queueArray;
+            currentIndex = currentQueue.findIndex(t => t.id === id);
             if (currentIndex === -1) return;
+            
             const track = currentQueue[currentIndex];
-            
-            if (currentObjectUrl) {
-                URL.revokeObjectURL(currentObjectUrl);
-            }
-            
+            if (currentObjectUrl) URL.revokeObjectURL(currentObjectUrl);
             currentObjectUrl = URL.createObjectURL(track.fileBlob);
             audio.src = currentObjectUrl;
             
-            // Update UI
+            // UI Update
             els.title.innerText = track.title;
             els.artist.innerText = track.artist;
             els.focusTitle.innerText = track.title;
             els.focusArtist.innerText = track.artist;
             
-            let coverUrl = 'https://placehold.co/512x512/27272a/e4e4e7?text=♪';
-            if (track.coverBlob) {
-                coverUrl = URL.createObjectURL(track.coverBlob);
-            }
+            let coverUrl = 'https://placehold.co/512x512/18181b/e4e4e7?text=♪';
+            if (track.coverBlob) coverUrl = URL.createObjectURL(track.coverBlob);
+            
             els.cover.src = coverUrl;
             els.focusCover.src = coverUrl;
+            els.focusBgBlur.src = coverUrl;
             
-            // Highlight list item
             document.querySelectorAll('.track-row').forEach(row => {
-                row.classList.remove('bg-indigo-500/20', 'border-indigo-500/50');
-                if (row.dataset.id == id) {
-                    row.classList.add('bg-indigo-500/20', 'border-indigo-500/50');
-                }
+                row.classList.remove('bg-indigo-500/20', 'border-indigo-500/30');
+                if (row.dataset.id == id) row.classList.add('bg-indigo-500/20', 'border-indigo-500/30');
             });
             
             audio.play().catch(e => {
-                console.error("Play prevented:", e);
-                // Try second activation attempt
-                if (audioCtx) {
-                    audioCtx.resume().then(() => audio.play().catch(e2 => console.error("Secondary fail:", e2)));
-                }
+                console.error(e);
+                if (audioCtx) audioCtx.resume().then(()=>audio.play().catch(console.error));
             });
 
-            // Setup Media Session API for background playback and lock screen controls
-            if ('mediaSession' in navigator && typeof MediaMetadata !== 'undefined') {
+            // Media Session
+            if ('mediaSession' in navigator) {
                 try {
                     navigator.mediaSession.metadata = new MediaMetadata({
-                        title: track.title,
-                        artist: track.artist,
-                        album: track.album,
-                        artwork: [
-                            { src: coverUrl, sizes: '512x512', type: track.coverBlob ? track.coverBlob.type : 'image/png' }
-                        ]
+                        title: track.title, artist: track.artist, album: track.album,
+                        artwork: [{ src: coverUrl, sizes: '512x512', type: track.coverBlob ? track.coverBlob.type : 'image/png' }]
                     });
-                    navigator.mediaSession.setActionHandler('play', () => audio.play().catch(e => console.warn(e)));
+                    navigator.mediaSession.setActionHandler('play', () => audio.play());
                     navigator.mediaSession.setActionHandler('pause', () => audio.pause());
                     navigator.mediaSession.setActionHandler('previoustrack', playPrev);
                     navigator.mediaSession.setActionHandler('nexttrack', playNext);
-                } catch (mediaError) {
-                    console.warn('Media Session API initialization failed:', mediaError);
-                }
+                } catch(e) {}
             }
         }
 
         function togglePlay() {
             if (!audio.src) return;
-            // Immediate AudioContext activation
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume().catch(e => console.warn(e));
-            }
-            if (isPlaying) audio.pause();
-            else audio.play().catch(e => console.error(e));
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+            if (isPlaying) audio.pause(); else audio.play().catch(e=>console.error(e));
         }
 
         function playNext() {
             if (currentQueue.length === 0) return;
-            let nextIdx;
-            if (isShuffle) {
-                nextIdx = Math.floor(Math.random() * currentQueue.length);
-            } else {
-                nextIdx = currentIndex + 1;
-                if (nextIdx >= currentQueue.length) {
-                    if (repeatMode === 1) nextIdx = 0;
-                    else return; // Stop at end of queue
-                }
+            let nextIdx = isShuffle ? Math.floor(Math.random() * currentQueue.length) : currentIndex + 1;
+            if (nextIdx >= currentQueue.length) {
+                if (repeatMode === 1) nextIdx = 0; else return;
             }
             playTrack(currentQueue[nextIdx].id);
         }
 
         function playPrev() {
-            if (audio.currentTime > 3) {
-                audio.currentTime = 0;
-                return;
-            }
+            if (audio.currentTime > 3) { audio.currentTime = 0; return; }
             if (currentQueue.length === 0) return;
             let prevIdx = currentIndex - 1;
-            if (prevIdx < 0) {
-                if (repeatMode === 1) prevIdx = currentQueue.length - 1;
-                else prevIdx = 0;
-            }
+            if (prevIdx < 0) prevIdx = repeatMode === 1 ? currentQueue.length - 1 : 0;
             playTrack(currentQueue[prevIdx].id);
         }
 
@@ -857,158 +819,116 @@
         function toggleRepeat() {
             repeatMode = (repeatMode + 1) % 3;
             const icon = els.repeatBtn.querySelector('i');
-            if (repeatMode === 0) {
-                els.repeatBtn.classList.replace('text-indigo-400', 'text-zinc-400');
-                icon.className = 'ph ph-repeat text-xl';
-            } else if (repeatMode === 1) {
-                els.repeatBtn.classList.replace('text-zinc-400', 'text-indigo-400');
-                icon.className = 'ph ph-repeat text-xl';
-            } else if (repeatMode === 2) {
-                els.repeatBtn.classList.add('text-indigo-400');
-                icon.className = 'ph ph-repeat-once text-xl';
-            }
+            els.repeatBtn.classList.remove('text-indigo-400', 'text-zinc-400');
+            if (repeatMode === 0) { els.repeatBtn.classList.add('text-zinc-400'); icon.className = 'ph ph-repeat text-xl'; }
+            else if (repeatMode === 1) { els.repeatBtn.classList.add('text-indigo-400'); icon.className = 'ph ph-repeat text-xl'; }
+            else { els.repeatBtn.classList.add('text-indigo-400'); icon.className = 'ph ph-repeat-once text-xl'; }
         }
 
-        function seekClick(e) {
-            if (!audio.duration) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const pos = (e.clientX - rect.left) / rect.width;
-            audio.currentTime = pos * audio.duration;
-        }
-
-        function setVolume(val) {
-            audio.volume = val;
-        }
-
+        function setVolume(val) { audio.volume = val; }
         function formatTime(sec) {
             if (isNaN(sec)) return "0:00";
-            const m = Math.floor(sec / 60);
-            const s = Math.floor(sec % 60).toString().padStart(2, '0');
-            return `${m}:${s}`;
+            return `${Math.floor(sec / 60)}:${Math.floor(sec % 60).toString().padStart(2, '0')}`;
         }
 
-        // --- STREAMING_CHUNK: Parsing metadata tags and indexing in Dexie DB... ---
+        // --- File Handling ---
         function isSupportedAudioFile(file) {
             const type = (file.type || '').toLowerCase();
             if (type.startsWith('audio/')) return true;
-
-            const name = (file.name || '').toLowerCase();
-            return /\.(mp3|m4a|aac|wav|ogg|oga|flac|aiff|aif|m4b|opus)$/i.test(name);
+            return /\.(mp3|m4a|aac|wav|ogg|flac|aiff|aif|m4b|opus)$/i.test((file.name || '').toLowerCase());
         }
 
         async function handleFileSelect(e) {
             const files = e.target.files;
             if (!files.length) return;
             
-            const btnText = document.querySelector('label span');
+            const btnText = document.getElementById('btn-add-text');
+            const bgProgress = document.getElementById('add-progress-bg');
             const originalText = btnText ? btnText.innerText : '';
-            if (btnText) btnText.innerText = "読み込み中...";
-
+            
             let addedCount = 0;
+            const total = files.length;
 
-            for (let i = 0; i < files.length; i++) {
+            for (let i = 0; i < total; i++) {
                 const file = files[i];
                 if (!isSupportedAudioFile(file)) continue;
                 
-                await new Promise((resolve) => {
+                // UI非ブロックのための微小ディレイと進捗表示
+                if (btnText && i % 3 === 0) {
+                    const pct = Math.floor((i / total) * 100);
+                    btnText.innerText = `処理中 ${pct}%`;
+                    if(bgProgress) bgProgress.style.width = `${pct}%`;
+                    await new Promise(r => setTimeout(r, 10)); // UI yield
+                }
+
+                await new Promise(resolve => {
                     jsmediatags.read(file, {
-                        onSuccess: async function(tag) {
-                            const tags = tag.tags;
+                        onSuccess: async tag => {
                             let pictureBlob = null;
-                            if (tags.picture) {
-                                const data = tags.picture.data;
-                                const format = tags.picture.format;
-                                let uint8Array = new Uint8Array(data);
-                                pictureBlob = new Blob([uint8Array], {type: format});
+                            if (tag.tags.picture) {
+                                pictureBlob = new Blob([new Uint8Array(tag.tags.picture.data)], {type: tag.tags.picture.format});
                             }
-                            
                             await db.tracks.add({
-                                title: tags.title || file.name.replace(/\.[^/.]+$/, ""),
-                                artist: tags.artist || "Unknown Artist",
-                                album: tags.album || "Unknown Album",
-                                fileBlob: file,
-                                coverBlob: pictureBlob,
-                                addedAt: Date.now()
+                                title: tag.tags.title || file.name.replace(/\.[^/.]+$/, ""),
+                                artist: tag.tags.artist || "Unknown Artist",
+                                album: tag.tags.album || "Unknown Album",
+                                fileBlob: file, coverBlob: pictureBlob, addedAt: Date.now()
                             });
-                            addedCount++;
-                            resolve();
+                            addedCount++; resolve();
                         },
-                        onError: async function(error) {
-                            // フォールバック: FLACやタグが壊れている場合はファイル名をタイトルにする
-                            console.warn("Could not read tags for", file.name, error);
+                        onError: async err => {
                             await db.tracks.add({
-                                title: file.name.replace(/\.[^/.]+$/, ""),
-                                artist: "Unknown Artist",
-                                album: "Unknown Album",
-                                fileBlob: file,
-                                coverBlob: null,
-                                addedAt: Date.now()
+                                title: file.name.replace(/\.[^/.]+$/, ""), artist: "Unknown Artist", album: "Unknown Album",
+                                fileBlob: file, coverBlob: null, addedAt: Date.now()
                             });
-                            addedCount++;
-                            resolve();
+                            addedCount++; resolve();
                         }
                     });
                 });
             }
             
             if (btnText) btnText.innerText = originalText;
-            e.target.value = ""; // Reset input
+            if (bgProgress) { bgProgress.style.width = '100%'; setTimeout(()=>bgProgress.style.width = '0%', 300); }
+            e.target.value = "";
             
-            if (addedCount > 0) {
-                showToast(`${addedCount}件の曲をライブラリに追加しました`);
-            }
+            if (addedCount > 0) showToast(`${addedCount} 曲追加しました`);
             renderLibrary();
         }
 
         async function deleteTrack(id, e) {
-            if (e) {
-                e.stopPropagation();
-            }
-            
-            const result = await showCustomConfirm("曲の削除", "この曲をライブラリから完全に削除しますか？");
-            if (result) {
+            if (e) e.stopPropagation();
+            if (await showCustomConfirm("曲の削除", "この曲をデバイスのライブラリから完全に削除しますか？")) {
                 await db.tracks.delete(id);
-                // Handle current track deleted
-                if (currentQueue[currentIndex] && currentQueue[currentIndex].id === id) {
-                    audio.pause();
-                    audio.src = '';
-                }
-                showToast("曲を削除しました");
+                if (currentQueue[currentIndex]?.id === id) { audio.pause(); audio.src = ''; }
+                showToast("削除完了");
                 renderLibrary();
             }
         }
 
-        // --- STREAMING_CHUNK: Managing track multi-selection and bulk actions... ---
+        // --- Bulk Actions ---
         function toggleSelectMode() {
             selectMode = !selectMode;
             selectedTrackIds.clear();
-            
             const btn = document.getElementById('btn-select-mode');
             const bulkControls = document.getElementById('bulk-controls');
             const headerIndex = document.getElementById('library-header-index');
 
             if (selectMode) {
-                btn.classList.add('bg-indigo-600', 'text-white');
-                btn.classList.remove('bg-zinc-800', 'text-zinc-300');
+                btn.classList.add('bg-indigo-600', 'text-white'); btn.classList.remove('bg-zinc-800', 'text-zinc-300');
                 bulkControls.classList.remove('hide');
-                headerIndex.innerHTML = `<i class="ph ph-squares-four text-lg"></i>`;
-                updateSelectedCountUI();
+                headerIndex.innerHTML = `<i class="ph ph-check-square-offset text-lg"></i>`;
             } else {
-                btn.classList.remove('bg-indigo-600', 'text-white');
-                btn.classList.add('bg-zinc-800', 'text-zinc-300');
+                btn.classList.remove('bg-indigo-600', 'text-white'); btn.classList.add('bg-zinc-800', 'text-zinc-300');
                 bulkControls.classList.add('hide');
                 headerIndex.innerHTML = '#';
             }
+            updateSelectedCountUI();
             renderLibrary();
         }
 
         function handleTrackCheck(id, checked, event) {
             event.stopPropagation();
-            if (checked) {
-                selectedTrackIds.add(id);
-            } else {
-                selectedTrackIds.delete(id);
-            }
+            checked ? selectedTrackIds.add(id) : selectedTrackIds.delete(id);
             updateSelectedCountUI();
         }
 
@@ -1019,369 +939,180 @@
         async function selectAllTracks(select) {
             const query = document.getElementById('search-input').value.toLowerCase();
             let tracks = await db.tracks.toArray();
-            if (query) {
-                tracks = tracks.filter(t => 
-                    t.title.toLowerCase().includes(query) || 
-                    t.artist.toLowerCase().includes(query) ||
-                    t.album.toLowerCase().includes(query)
-                );
-            }
-
+            if (query) tracks = tracks.filter(t => t.title.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query) || t.album.toLowerCase().includes(query));
             selectedTrackIds.clear();
-            if (select) {
-                tracks.forEach(track => selectedTrackIds.add(track.id));
-            }
-            
-            document.querySelectorAll('.track-checkbox').forEach(chk => {
-                chk.checked = select;
-            });
+            if (select) tracks.forEach(track => selectedTrackIds.add(track.id));
+            document.querySelectorAll('.track-checkbox').forEach(chk => chk.checked = select);
             updateSelectedCountUI();
         }
 
         async function confirmBulkDelete() {
-            if (selectedTrackIds.size === 0) {
-                showToast("曲が選択されていません", "error");
-                return;
-            }
-
-            const result = await showCustomConfirm(
-                "複数曲の削除", 
-                `選択された ${selectedTrackIds.size} 件の曲をライブラリから完全に削除しますか？`
-            );
-            
-            if (result) {
-                const idsToDelete = Array.from(selectedTrackIds);
-                
-                // If currently playing track is in delete list, stop audio
-                const currentTrack = currentQueue[currentIndex];
-                if (currentTrack && selectedTrackIds.has(currentTrack.id)) {
-                    audio.pause();
-                    audio.src = '';
-                }
-
-                await db.tracks.bulkDelete(idsToDelete);
-                selectedTrackIds.clear();
-                updateSelectedCountUI();
-                toggleSelectMode(); // Close select mode after deletion
-                showToast("選択した曲を削除しました");
-                renderLibrary();
+            if (selectedTrackIds.size === 0) return showToast("曲が選択されていません", "error");
+            if (await showCustomConfirm("一括削除", `選択された ${selectedTrackIds.size} 曲を完全に削除しますか？`)) {
+                if (currentQueue[currentIndex] && selectedTrackIds.has(currentQueue[currentIndex].id)) { audio.pause(); audio.src = ''; }
+                await db.tracks.bulkDelete(Array.from(selectedTrackIds));
+                selectedTrackIds.clear(); updateSelectedCountUI(); toggleSelectMode();
+                showToast("一括削除しました"); renderLibrary();
             }
         }
 
-        // --- STREAMING_CHUNK: Managing SPA view navigation... ---
+        // --- Views ---
         function switchView(viewId) {
             document.querySelectorAll('.view-panel').forEach(el => el.classList.add('hide'));
             if(viewId !== 'focus') {
                 document.getElementById(`view-${viewId}`).classList.remove('hide');
-                
-                // Update nav highlighting
                 document.querySelectorAll('.nav-btn').forEach(btn => {
-                    if(btn.dataset.target === viewId) {
-                        btn.classList.add('bg-indigo-600', 'text-white');
-                        btn.classList.remove('text-zinc-400', 'hover:bg-zinc-700');
-                    } else {
-                        btn.classList.remove('bg-indigo-600', 'text-white');
-                        btn.classList.add('text-zinc-400', 'hover:bg-zinc-700');
-                    }
+                    if(btn.dataset.target === viewId) { btn.classList.add('bg-indigo-600', 'text-white'); btn.classList.remove('text-zinc-400', 'hover:bg-zinc-700'); }
+                    else { btn.classList.remove('bg-indigo-600', 'text-white'); btn.classList.add('text-zinc-400', 'hover:bg-zinc-700'); }
                 });
-            } else {
-                document.getElementById('view-focus').classList.remove('hide');
-            }
-            
+            } else document.getElementById('view-focus').classList.remove('hide');
             if(viewId === 'albums') renderAlbums();
         }
 
         function toggleFocusMode() {
             focusMode = !focusMode;
-            if (focusMode) {
-                switchView('focus');
-                document.getElementById('sidebar').classList.add('hidden');
-            } else {
-                switchView('library');
-                document.getElementById('sidebar').classList.remove('hidden');
-            }
+            if (focusMode) { switchView('focus'); document.getElementById('sidebar').classList.add('hidden'); }
+            else { switchView('library'); document.getElementById('sidebar').classList.remove('hidden'); }
         }
 
-        // --- STREAMING_CHUNK: Rendering primary tracks list dynamically... ---
+        // --- Render ---
         async function renderLibrary() {
             const query = document.getElementById('search-input').value.toLowerCase();
             let tracks = await db.tracks.orderBy('addedAt').reverse().toArray();
-            
-            if (query) {
-                tracks = tracks.filter(t => 
-                    t.title.toLowerCase().includes(query) || 
-                    t.artist.toLowerCase().includes(query) ||
-                    t.album.toLowerCase().includes(query)
-                );
-            }
-            
+            if (query) tracks = tracks.filter(t => t.title.toLowerCase().includes(query) || t.artist.toLowerCase().includes(query) || t.album.toLowerCase().includes(query));
             const listEl = document.getElementById('library-list');
             listEl.innerHTML = '';
             
             if (tracks.length === 0) {
-                listEl.innerHTML = '<div class="text-center text-zinc-500 py-10">曲が見つかりません。</div>';
+                listEl.innerHTML = '<div class="text-center text-zinc-500 py-20 flex flex-col items-center gap-3"><i class="ph ph-music-notes-simple text-5xl opacity-40"></i><p>見つかりません</p></div>';
                 return;
             }
 
             tracks.forEach((track, index) => {
+                const isPlaying = currentIndex !== -1 && currentQueue[currentIndex]?.id === track.id;
                 const div = document.createElement('div');
-                div.className = `track-row grid grid-cols-[auto_1fr_1fr_auto] items-center gap-4 p-3 rounded-lg hover:bg-zinc-700/50 transition-colors border border-transparent cursor-pointer group ${currentIndex !== -1 && currentQueue[currentIndex] && currentQueue[currentIndex].id === track.id ? 'bg-indigo-500/20 border-indigo-500/50' : ''}`;
+                div.className = `track-row grid grid-cols-[auto_1fr_1fr_auto] items-center gap-4 p-3 rounded-xl hover:bg-zinc-700/60 transition-all cursor-pointer group ${isPlaying ? 'bg-indigo-500/20 border border-indigo-500/30' : 'border border-transparent'}`;
                 div.dataset.id = track.id;
-                
-                div.onclick = (e) => {
-                    if(e.target.closest('button') || e.target.closest('input[type="checkbox"]')) return;
-                    playTrack(track.id, tracks);
-                };
+                div.onclick = (e) => { if(!e.target.closest('button') && !e.target.closest('input')) playTrack(track.id, tracks); };
 
-                let coverHtml = '<div class="w-10 h-10 bg-zinc-700 rounded shadow flex items-center justify-center shrink-0"><i class="ph ph-music-notes text-zinc-500"></i></div>';
-                if (track.coverBlob) {
-                    const url = URL.createObjectURL(track.coverBlob);
-                    coverHtml = `<img src="${url}" class="w-10 h-10 rounded shadow object-cover shrink-0">`;
-                }
+                let coverHtml = `<div class="w-11 h-11 bg-zinc-800 rounded-lg shadow-inner flex items-center justify-center shrink-0"><i class="ph ph-music-notes text-zinc-500"></i></div>`;
+                if (track.coverBlob) coverHtml = `<img src="${URL.createObjectURL(track.coverBlob)}" class="w-11 h-11 rounded-lg shadow-md object-cover shrink-0">`;
 
-                // Decide the index column based on Selection Mode
-                let indexColumnHtml = `<div class="w-8 text-center text-zinc-500 font-medium">${index + 1}</div>`;
+                let idxHtml = `<div class="w-8 text-center text-zinc-500 font-bold">${isPlaying ? '<i class="ph-fill ph-speaker-high text-indigo-400 animate-pulse"></i>' : index + 1}</div>`;
                 if (selectMode) {
                     const isChecked = selectedTrackIds.has(track.id) ? 'checked' : '';
-                    indexColumnHtml = `
-                        <div class="w-8 flex justify-center items-center">
-                            <input type="checkbox" class="track-checkbox w-5 h-5 accent-indigo-600 rounded cursor-pointer" ${isChecked} onchange="handleTrackCheck(${track.id}, this.checked, event)">
-                        </div>
-                    `;
+                    idxHtml = `<div class="w-8 flex justify-center"><input type="checkbox" class="track-checkbox w-5 h-5 accent-indigo-500 rounded cursor-pointer" ${isChecked} onchange="handleTrackCheck(${track.id}, this.checked, event)"></div>`;
                 }
 
                 div.innerHTML = `
-                    ${indexColumnHtml}
-                    <div class="flex items-center gap-3 min-w-0">
+                    ${idxHtml}
+                    <div class="flex items-center gap-3.5 min-w-0">
                         ${coverHtml}
                         <div class="min-w-0">
-                            <div class="font-bold text-sm truncate text-white">${escapeHtml(track.title)}</div>
-                            <div class="text-xs text-zinc-400 truncate">${escapeHtml(track.artist)}</div>
+                            <div class="font-bold text-sm truncate ${isPlaying ? 'text-indigo-300' : 'text-white'}">${escapeHtml(track.title)}</div>
+                            <div class="text-xs text-zinc-400 truncate mt-0.5">${escapeHtml(track.artist)}</div>
                         </div>
                     </div>
                     <div class="hidden md:block text-sm text-zinc-400 truncate">${escapeHtml(track.album)}</div>
-                    <div class="w-20 flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onclick="openEditModal(${track.id}, event)" class="p-2 hover:bg-zinc-600 rounded text-zinc-300 transition-colors" title="編集">
-                            <i class="ph ph-pencil-simple"></i>
-                        </button>
-                        <button onclick="deleteTrack(${track.id}, event)" class="p-2 hover:bg-red-500/20 hover:text-red-400 rounded text-zinc-300 transition-colors" title="削除">
-                            <i class="ph ph-trash"></i>
-                        </button>
+                    <div class="w-20 flex justify-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick="openEditModal(${track.id}, event)" class="p-2 hover:bg-zinc-600 rounded-lg text-zinc-300 transition-all" title="編集"><i class="ph-fill ph-pencil-simple"></i></button>
+                        <button onclick="deleteTrack(${track.id}, event)" class="p-2 hover:bg-red-500/20 hover:text-red-400 rounded-lg text-zinc-300 transition-all" title="削除"><i class="ph-fill ph-trash"></i></button>
                     </div>
                 `;
                 listEl.appendChild(div);
             });
         }
 
-        // --- STREAMING_CHUNK: Rendering Albums Grid... ---
         async function renderAlbums() {
             const tracks = await db.tracks.toArray();
-            const albumsMap = {};
-            
-            tracks.forEach(t => {
-                if (!albumsMap[t.album]) {
-                    albumsMap[t.album] = {
-                        name: t.album,
-                        artist: t.artist,
-                        coverBlob: t.coverBlob,
-                        tracks: []
-                    };
-                }
-                albumsMap[t.album].tracks.push(t);
-            });
+            const map = {};
+            tracks.forEach(t => { if(!map[t.album]) map[t.album] = {name: t.album, artist: t.artist, cover: t.coverBlob, tracks: []}; map[t.album].tracks.push(t); });
+            const arr = Object.values(map).sort((a,b) => a.name.localeCompare(b.name));
+            const grid = document.getElementById('albums-grid');
+            grid.innerHTML = '';
+            if (arr.length === 0) return grid.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-10">アルバムなし</div>';
 
-            const albumsArray = Object.values(albumsMap).sort((a,b) => a.name.localeCompare(b.name));
-            const gridEl = document.getElementById('albums-grid');
-            gridEl.innerHTML = '';
-
-            if (albumsArray.length === 0) {
-                gridEl.innerHTML = '<div class="col-span-full text-center text-zinc-500 py-10">アルバムがありません。</div>';
-                return;
-            }
-
-            albumsArray.forEach(album => {
+            arr.forEach(album => {
                 const div = document.createElement('div');
                 div.className = 'group cursor-pointer flex flex-col gap-3';
                 div.onclick = () => showAlbumDetail(album);
-
-                let coverUrl = 'https://placehold.co/512x512/27272a/e4e4e7?text=Album';
-                if (album.coverBlob) {
-                    coverUrl = URL.createObjectURL(album.coverBlob);
-                }
-
+                const url = album.cover ? URL.createObjectURL(album.cover) : 'https://placehold.co/512x512/18181b/e4e4e7?text=Album';
                 div.innerHTML = `
-                    <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-zinc-800 shadow-lg group-hover:-translate-y-2 group-hover:shadow-indigo-500/20 transition-all duration-300">
-                        <img src="${coverUrl}" class="w-full h-full object-cover">
+                    <div class="relative w-full aspect-square rounded-2xl overflow-hidden bg-zinc-800 shadow-lg group-hover:-translate-y-1.5 group-hover:shadow-indigo-500/20 transition-all duration-300">
+                        <img src="${url}" class="w-full h-full object-cover">
                         <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <div class="w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg transform scale-50 group-hover:scale-100 transition-transform">
-                                <i class="ph-fill ph-play text-white text-2xl ml-1"></i>
-                            </div>
+                            <div class="w-14 h-14 bg-indigo-600 rounded-full flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100 transition-transform"><i class="ph-fill ph-play text-white text-2xl ml-1"></i></div>
                         </div>
                     </div>
                     <div>
-                        <h3 class="font-bold text-white truncate">${escapeHtml(album.name)}</h3>
-                        <p class="text-sm text-zinc-400 truncate">${escapeHtml(album.artist)}</p>
+                        <h3 class="font-bold text-white truncate text-sm md:text-base">${escapeHtml(album.name)}</h3>
+                        <p class="text-xs md:text-sm text-zinc-400 truncate">${escapeHtml(album.artist)}</p>
                     </div>
                 `;
-                gridEl.appendChild(div);
+                grid.appendChild(div);
             });
         }
 
         let currentAlbumDetailTracks = [];
-
         function showAlbumDetail(album) {
             document.getElementById('view-albums').classList.add('hide');
-            const detailView = document.getElementById('view-album-detail');
-            detailView.classList.remove('hide');
-            
-            detailView.scrollTop = 0;
+            const view = document.getElementById('view-album-detail'); view.classList.remove('hide'); view.scrollTop = 0;
             currentAlbumDetailTracks = album.tracks;
-
             document.getElementById('album-detail-title').innerText = album.name;
             document.getElementById('album-detail-artist').innerText = album.artist;
+            document.getElementById('album-detail-cover').src = album.cover ? URL.createObjectURL(album.cover) : 'https://placehold.co/512x512/18181b/e4e4e7?text=Album';
             
-            let coverUrl = 'https://placehold.co/512x512/27272a/e4e4e7?text=Album';
-            if (album.coverBlob) {
-                coverUrl = URL.createObjectURL(album.coverBlob);
-            }
-            document.getElementById('album-detail-cover').src = coverUrl;
-
-            const listEl = document.getElementById('album-tracks-list');
-            listEl.innerHTML = '';
-            
+            const list = document.getElementById('album-tracks-list'); list.innerHTML = '';
             album.tracks.forEach((track, index) => {
                 const div = document.createElement('div');
-                div.className = `flex items-center gap-4 p-3 hover:bg-zinc-700/50 rounded-lg cursor-pointer transition-colors ${currentIndex !== -1 && currentQueue[currentIndex] && currentQueue[currentIndex].id === track.id ? 'text-indigo-400' : 'text-zinc-200'}`;
+                div.className = `flex items-center gap-4 p-3 hover:bg-zinc-700/50 rounded-xl cursor-pointer transition-colors ${currentIndex!==-1 && currentQueue[currentIndex]?.id===track.id ? 'bg-indigo-500/10 text-indigo-300' : 'text-zinc-200'}`;
                 div.onclick = () => playTrack(track.id, album.tracks);
-                
-                div.innerHTML = `
-                    <div class="w-8 text-center text-zinc-500 text-sm">${index + 1}</div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold text-sm truncate">${escapeHtml(track.title)}</div>
-                        <div class="text-xs text-zinc-400 truncate">${escapeHtml(track.artist)}</div>
-                    </div>
-                `;
-                listEl.appendChild(div);
+                div.innerHTML = `<div class="w-8 text-center text-zinc-500 text-sm font-bold">${index + 1}</div><div class="flex-1 min-w-0"><div class="font-bold text-sm truncate">${escapeHtml(track.title)}</div><div class="text-xs opacity-70 truncate">${escapeHtml(track.artist)}</div></div>`;
+                list.appendChild(div);
             });
         }
+        function playAlbum() { if (currentAlbumDetailTracks.length > 0) playTrack(currentAlbumDetailTracks[0].id, currentAlbumDetailTracks); }
 
-        function playAlbum() {
-            if (currentAlbumDetailTracks.length > 0) {
-                playTrack(currentAlbumDetailTracks[0].id, currentAlbumDetailTracks);
-            }
-        }
-
-        // --- STREAMING_CHUNK: Building custom vertical equalizer bands... ---
+        // --- EQ ---
         function buildEqUI() {
             const container = document.getElementById('eq-sliders');
             frequencies.forEach((freq, idx) => {
-                const label = freq >= 1000 ? (freq/1000) + 'k' : freq;
                 const div = document.createElement('div');
                 div.className = 'flex flex-col items-center gap-4';
-                div.innerHTML = `
-                    <div class="text-xs text-indigo-400 font-mono w-8 text-center" id="eq-val-${idx}">0</div>
-                    <div class="vertical-slider-container">
-                        <input type="range" min="-12" max="12" value="0" class="vertical-slider" oninput="updateEq(${idx}, this.value)">
-                    </div>
-                    <div class="text-xs text-zinc-400 font-bold">${label}</div>
-                `;
+                div.innerHTML = `<div class="text-xs text-indigo-400 font-mono w-8 text-center font-bold" id="eq-val-${idx}">0</div><div class="vertical-slider-container"><input type="range" min="-12" max="12" value="0" class="vertical-slider" oninput="updateEq(${idx}, this.value)"></div><div class="text-xs text-zinc-400 font-bold">${freq >= 1000 ? (freq/1000)+'k' : freq}</div>`;
                 container.appendChild(div);
             });
         }
-
         function updateEq(index, value) {
             document.getElementById(`eq-val-${index}`).innerText = value > 0 ? `+${value}` : value;
-            if (eqEnabled && eqBands[index]) {
-                eqBands[index].gain.value = value;
-            }
+            if (eqEnabled && eqBands[index]) eqBands[index].gain.value = value;
         }
-
         function applyEqPreset(preset) {
-            const presets = {
-                flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                bass: [8, 6, 4, 2, 0, 0, 0, 0, 0, 0],
-                vocal: [-2, -2, 0, 2, 4, 4, 2, 0, -2, -2],
-                rock: [6, 4, 2, -2, -4, -2, 2, 4, 6, 6],
-                pop: [-2, -1, 2, 4, 4, 2, 0, -1, -2, -2],
-                classical: [4, 3, 2, 1, -1, -1, 0, 2, 4, 4]
-            };
+            const presets = { flat: [0,0,0,0,0,0,0,0,0,0], bass: [8,6,4,2,0,0,0,0,0,0], vocal: [-2,-2,0,2,4,4,2,0,-2,-2], rock: [6,4,2,-2,-4,-2,2,4,6,6], pop: [-2,-1,2,4,4,2,0,-1,-2,-2], classical: [4,3,2,1,-1,-1,0,2,4,4] };
             const values = presets[preset] || presets.flat;
-            const sliders = document.querySelectorAll('.vertical-slider');
-            sliders.forEach((slider, idx) => {
-                slider.value = values[idx];
-                updateEq(idx, values[idx]);
-            });
+            document.querySelectorAll('.vertical-slider').forEach((s, idx) => { s.value = values[idx]; updateEq(idx, values[idx]); });
         }
 
-        // --- STREAMING_CHUNK: Managing tag editing modals... ---
-        // Edit Modal
-        const editModal = document.getElementById('edit-modal');
-        const editModalContent = document.getElementById('edit-modal-content');
-
+        // --- Edit ---
+        const editModal = document.getElementById('edit-modal'), editModalContent = document.getElementById('edit-modal-content');
         async function openEditModal(id, e) {
             if(e) e.stopPropagation();
-            const track = await db.tracks.get(id);
-            if (!track) return;
-
-            document.getElementById('edit-id').value = track.id;
-            document.getElementById('edit-title').value = track.title;
-            document.getElementById('edit-artist').value = track.artist;
-            document.getElementById('edit-album').value = track.album;
-
-            editModal.classList.remove('hide');
-            void editModal.offsetWidth;
-            editModal.classList.remove('opacity-0');
-            editModalContent.classList.remove('scale-95');
+            const track = await db.tracks.get(id); if (!track) return;
+            document.getElementById('edit-id').value = track.id; document.getElementById('edit-title').value = track.title; document.getElementById('edit-artist').value = track.artist; document.getElementById('edit-album').value = track.album;
+            editModal.classList.remove('hide'); void editModal.offsetWidth; editModal.classList.remove('opacity-0'); editModalContent.classList.remove('scale-95');
         }
-
-        function closeEditModal() {
-            editModal.classList.add('opacity-0');
-            editModalContent.classList.add('scale-95');
-            setTimeout(() => {
-                editModal.classList.add('hide');
-            }, 200);
-        }
-
+        function closeEditModal() { editModal.classList.add('opacity-0'); editModalContent.classList.add('scale-95'); setTimeout(() => editModal.classList.add('hide'), 300); }
         async function saveEdit() {
             const id = parseInt(document.getElementById('edit-id').value);
-            const title = document.getElementById('edit-title').value.trim() || "Unknown Title";
-            const artist = document.getElementById('edit-artist').value.trim() || "Unknown Artist";
-            const album = document.getElementById('edit-album').value.trim() || "Unknown Album";
-
-            await db.tracks.update(id, { title, artist, album });
-            closeEditModal();
-            showToast("タグ情報を更新しました");
-            
-            if (!document.getElementById('view-library').classList.contains('hide')) {
-                renderLibrary();
-            } else if (!document.getElementById('view-albums').classList.contains('hide')) {
-                renderAlbums();
-            }
-            
-            if (currentQueue[currentIndex] && currentQueue[currentIndex].id === id) {
-                currentQueue[currentIndex].title = title;
-                currentQueue[currentIndex].artist = artist;
-                currentQueue[currentIndex].album = album;
-                els.title.innerText = title;
-                els.artist.innerText = artist;
-                els.focusTitle.innerText = title;
-                els.focusArtist.innerText = artist;
+            const title = document.getElementById('edit-title').value.trim() || "Unknown Title", artist = document.getElementById('edit-artist').value.trim() || "Unknown", album = document.getElementById('edit-album').value.trim() || "Unknown";
+            await db.tracks.update(id, { title, artist, album }); closeEditModal(); showToast("タグを更新しました");
+            if (!document.getElementById('view-library').classList.contains('hide')) renderLibrary(); else if (!document.getElementById('view-albums').classList.contains('hide')) renderAlbums();
+            if (currentQueue[currentIndex]?.id === id) {
+                currentQueue[currentIndex].title = title; currentQueue[currentIndex].artist = artist; currentQueue[currentIndex].album = album;
+                els.title.innerText = title; els.artist.innerText = artist; els.focusTitle.innerText = title; els.focusArtist.innerText = artist;
             }
         }
-
-        // Utils
-        function escapeHtml(unsafe) {
-            return (unsafe || '').toString()
-                 .replace(/&/g, "&amp;")
-                 .replace(/</g, "&lt;")
-                 .replace(/>/g, "&gt;")
-                 .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;");
-        }
-
-        function setupNavigation() {
-            // Placeholder for optional desktop custom listeners
-        }
+        function escapeHtml(unsafe) { return (unsafe||'').toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
     </script>
 </body>
 </html>
